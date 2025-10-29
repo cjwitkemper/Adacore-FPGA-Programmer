@@ -1,0 +1,190 @@
+# THIS FILE IS GENERATED. DO NOT EDIT.
+
+[solution]
+[solution.context]
+solved = true
+[[solution.state]]
+crate = "gnat_arm_elf"
+fulfilment = "solved"
+pinned = false
+transitivity = "indirect"
+versions = "^15"
+[solution.state.release]
+auto-gpr-with = false
+description = "The GNAT Ada compiler - ARM cross-compiler"
+licenses = "GPL-3.0-or-later AND GPL-3.0-or-later WITH GCC-exception-3.1"
+maintainers = [
+"chouteau@adacore.com",
+"sagaert@adacore.com",
+]
+maintainers-logins = [
+"Fabien-Chouteau",
+"AldanTanneo",
+]
+name = "gnat_arm_elf"
+provides = [
+"gnat=15.2.1",
+]
+version = "15.2.1"
+website = "https://github.com/alire-project/GNAT-FSF-builds"
+[solution.state.release.configuration]
+auto_gpr_with = true
+disabled = true
+generate_ada = true
+generate_c = true
+generate_gpr = true
+output_dir = "config"
+[solution.state.release.environment]
+[solution.state.release.environment.PATH]
+prepend = "${CRATE_ROOT}/bin"
+[solution.state.release.origin]
+binary = true
+hashes = [
+"sha256:a5e9cfb14ffa1ad48af2ed86b47a2e756925b2dd57aed55aba78d34431a45404",
+]
+url = "https://github.com/alire-project/GNAT-FSF-builds/releases/download/gnat-15.2.0-1/gnat-arm-elf-linux64-x86_64-15.2.0-1.tar.gz"
+[[solution.state]]
+crate = "light_tasking_stm32f0xx"
+fulfilment = "solved"
+pinned = false
+transitivity = "direct"
+versions = "*"
+[solution.state.release]
+authors = [
+"AdaCore",
+"Daniel King",
+]
+description = "light-tasking runtime for the STM32F0xx SoC"
+licenses = "GPL-3.0-or-later WITH GCC-exception-3.1"
+long-description = "## Usage\n\nFirst edit your `alire.toml` file and add the following elements:\n - Add `light_tasking_stm32f0xx` in the dependency list:\n   ```toml\n   [[depends-on]]\n   light_tasking_stm32f0xx = \"*\"\n   ```\n - if applicable, apply any runtime configuration variables (see below).\n\nThen edit your project file to add the following elements:\n - \"with\" the run-time project file. With this, gprbuild will compile the run-time before your application\n   ```ada\n   with \"runtime_build.gpr\";\n   ```\n - Specify the `Target` and `Runtime` attributes:\n   ```ada\n      for Target use runtime_build'Target;\n      for Runtime (\"Ada\") use runtime_build'Runtime (\"Ada\");\n   ```\n - specify the `Linker` switches:\n   ```ada\n   package Linker is\n     for Switches (\"Ada\") use Runtime_Build.Linker_Switches;\n   end Linker;\n   ```\n\nThe runtime is configurable via Alire crate configuration variables.\nSee the project website for full details of the available options.\n\nBy default, the runtime is configured for the STM32F072RB. If your board has\na different MCU, then you will need to specify which MCU you are using via\nthe crate configuration. For example, to configure the runtime for the\nSTM32F030F4, add the following to your `alire.toml`:\n```toml\n[configuration.values]\nlight_tasking_stm32f0xx.MCU_Sub_Family            = \"F030\"\nlight_tasking_stm32f0xx.MCU_Pin_Count             = \"F\"\nlight_tasking_stm32f0xx.MCU_User_Code_Memory_Size = \"4\"\n```\n\nBy default, the runtime configures the clock tree for a 48 MHz system clock\nfrom the high-speed internal (HSI) oscillator. If you want a different clock\nconfiguration, then use the crate configuration variables to specify the\nconfiguration you wish to use. For example, to configure the runtime to\ngenerate a 32 MHz system clock from a 16 MHz HSE crystal oscillator:\n```toml\n[configuration.values]\n# Configure a 16 MHz HSE crystal oscillator\nlight_tasking_stm32f0xx.HSE_Clock_Frequency = 16000000\nlight_tasking_stm32f0xx.HSE_Bypass = false\n\n# Use the PLL as the SYSCLK source\nlight_tasking_stm32f0xx.SYSCLK_Src = \"PLL\"\n\n# Configure the PLL input for a 16 MHz input from the HSE\nlight_tasking_stm32f0xx.PLL_Src = \"HSE_PREDIV\"\nlight_tasking_stm32f0xx.PREDIV = 1\n\n# Configure the PLL to output 32 MHz (16 MHz * 2)\nlight_tasking_stm32f0xx.PLLMUL = 2\n\n# Configure the AHB an APB to also run at 32 MHz\nlight_tasking_stm32f0xx.AHB_Pre = \"DIV1\"\nlight_tasking_stm32f0xx.APB_Pre = \"DIV1\"\n```\n"
+maintainers = [
+"Daniel King <damaki.gh@gmail.com>",
+]
+maintainers-logins = [
+"damaki",
+]
+name = "light_tasking_stm32f0xx"
+project-files = [
+"runtime_build.gpr",
+"ravenscar_build.gpr",
+]
+tags = [
+"embedded",
+"runtime",
+"stm32f0",
+]
+version = "15.0.0"
+website = "https://github.com/damaki/stm32f0xx-runtimes"
+[solution.state.release.configuration]
+auto_gpr_with = true
+disabled = false
+generate_ada = true
+generate_c = false
+generate_gpr = true
+output_dir = "gnat_user"
+[solution.state.release.configuration.variables]
+[solution.state.release.configuration.variables.AHB_Pre]
+default = "DIV1"
+type = "Enum"
+values = [
+"DIV1",
+"DIV2",
+"DIV4",
+"DIV8",
+"DIV16",
+"DIV64",
+"DIV128",
+"DIV256",
+"DIV512",
+]
+[solution.state.release.configuration.variables.APB_Pre]
+default = "DIV2"
+type = "Enum"
+values = [
+"DIV1",
+"DIV2",
+"DIV4",
+"DIV8",
+"DIV16",
+]
+[solution.state.release.configuration.variables.HSE_Bypass]
+default = false
+type = "Boolean"
+[solution.state.release.configuration.variables.HSE_Clock_Frequency]
+default = 8000000
+first = 1
+last = 32000000
+type = "Integer"
+[solution.state.release.configuration.variables.LSI_Enabled]
+default = true
+type = "Boolean"
+[solution.state.release.configuration.variables.MCU_Pin_Count]
+default = "R"
+type = "Enum"
+values = [
+"C",
+"E",
+"F",
+"G",
+"K",
+"R",
+"V",
+]
+[solution.state.release.configuration.variables.MCU_Sub_Family]
+default = "F072"
+type = "Enum"
+values = [
+"F030",
+"F031",
+"F038",
+"F042",
+"F048",
+"F051",
+"F058",
+"F070",
+"F071",
+"F072",
+"F078",
+"F091",
+"F098",
+]
+[solution.state.release.configuration.variables.MCU_User_Code_Memory_Size]
+default = "B"
+type = "String"
+[solution.state.release.configuration.variables.PLLMUL]
+default = 12
+first = 2
+last = 16
+type = "Integer"
+[solution.state.release.configuration.variables.PLL_Src]
+default = "HSI_2"
+type = "Enum"
+values = [
+"HSI_2",
+"HSI_PREDIV",
+"HSE_PREDIV",
+"HSI48_PREDIV",
+]
+[solution.state.release.configuration.variables.PREDIV]
+default = 2
+first = 1
+last = 16
+type = "Integer"
+[solution.state.release.configuration.variables.SYSCLK_Src]
+default = "PLL"
+type = "Enum"
+values = [
+"HSI",
+"HSE",
+"PLL",
+"HSI48",
+]
+[solution.state.release.origin]
+hashes = [
+"sha256:d14cebc33645dfda73a033a49fd3241515492b91cad51a9aec6e5ff7764b77d7",
+"sha512:6deaa1fcf59ea878ae0a9079a5a9a3d785ee83b77bdd7d9fb6ea5012f42f4e014834176a4d737160cd1afdab70ab0188f830f67f0f7f2ec6f1d8eca12c4e5da9",
+]
+url = "https://github.com/damaki/stm32f0xx-runtimes/releases/download/v15.0.0/light-tasking-stm32f0xx-15.0.0.tar.gz"
+[[solution.state.release.depends-on]]
+gnat_arm_elf = "^15"
+

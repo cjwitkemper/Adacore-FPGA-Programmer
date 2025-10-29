@@ -1,0 +1,4 @@
+stm32f070rb_blinky.adb:1:13: (style) bad casing of "STM32F0x0" declared at stm32f0x0.ads:11 [-gnatyr]
+stm32f070rb_blinky.adb:1:33: (style) bad casing of "STM32F0x0" declared at stm32f0x0.ads:11 [-gnatyr]
+stm32f070rb_blinky.adb:2:13: (style) bad casing of "STM32F0x0" declared at stm32f0x0.ads:11 [-gnatyr]
+stm32f070rb_blinky.adb:2:33: (style) bad casing of "STM32F0x0" declared at stm32f0x0.ads:11 [-gnatyr]
