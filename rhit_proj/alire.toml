@@ -1,0 +1,11 @@
+name = "rhit_proj"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Kaden Nutter"]
+maintainers = ["Kaden Nutter <nutterkp@rose-hulman.edu>"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["rhit_proj"]
