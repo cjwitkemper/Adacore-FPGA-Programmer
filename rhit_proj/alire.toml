@@ -14,6 +14,7 @@ executables = ["rhit_proj"]
 
 [[depends-on]]
 light_tasking_stm32f0xx = "*"
+usb_embedded = "*"
 
 [configuration.values]
 light_tasking_stm32f0xx.MCU_Sub_Family            = "F070"

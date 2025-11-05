@@ -1,0 +1,25 @@
+authors = [
+"AdaCore",
+]
+description = "Ada binding generator from CMSIS-SVD hardware descriptions files"
+executables = [
+"svd2ada",
+]
+maintainers = [
+"Fabien Chouteau <fabien.chouteau@gmail.com>",
+]
+maintainers-logins = [
+"Fabien-Chouteau",
+]
+name = "svd2ada"
+version = "0.1.0"
+[configuration]
+auto_gpr_with = true
+disabled = true
+generate_ada = true
+generate_c = true
+generate_gpr = true
+output_dir = "config"
+[[depends-on]]
+xmlada = "^22.0.0"
+
