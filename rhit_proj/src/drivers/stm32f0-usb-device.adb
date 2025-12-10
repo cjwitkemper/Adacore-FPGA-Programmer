@@ -30,6 +30,32 @@ package body Stm32f0x0.USB_Device is
    end Create;
 
    overriding --Initialize
+   -------------------------------------------------------------------------------
+--  Initialize
+--
+--  Initializes the STM32F0 USB Device Controller (UDC). This procedure:
+--
+--    * Enables the GPIO clocks for the USB DM/DP pins (PA11/PA12)
+--    * Configures the USB pins as floating inputs
+--    * Performs a USB peripheral reset through APB1
+--    * Powers up the USB transceiver block
+--    * Clears the entire USB Packet Memory (1 KB PMA)
+--    * Resets all USB interrupt status registers
+--    * Enables USB reset, suspend, wakeup, and transfer interrupts
+--    * Sets the BTABLE pointer to the start of packet memory
+--    * Enables the D+ pull-up to signal Full-Speed device connection
+--
+--  Parameters:
+--    This : in out UDC
+--       The USB Device Controller instance being initialized. Internal hardware
+--       registers and packet memory associated with this instance are reset and
+--       prepared for subsequent endpoint configuration and USB enumeration.
+--
+--  This procedure must be called before configuring endpoints or enabling USB
+--  classes. It prepares the hardware but does not configure individual
+--  endpoints.
+-------------------------------------------------------------------------------
+
    procedure Initialize (This : in out UDC) is
       DM_Pin : constant GPIO_Point := PA11;
       DP_Pin : constant GPIO_Point := PA12;
@@ -93,6 +119,43 @@ package body Stm32f0x0.USB_Device is
    end Initialize;
 
    overriding --Request_Buffer
+   -------------------------------------------------------------------------------
+--  Request_Buffer
+--
+--  Allocates and returns a CPU-accessible buffer for the specified USB
+--  endpoint direction (IN or OUT). This procedure:
+--
+--    * Allocates the endpoint's hardware-facing PMA buffer within the USB
+--      Packet Memory (via Allocate_Endpoint_Buffer)
+--    * Allocates a corresponding MCU-facing RAM buffer used by the USB class
+--      or application to read/write packet data
+--    * Records the allocated buffer address and size in the endpoint status
+--      structure, storing Tx_* fields for EP_In or Rx_* fields for EP_Out
+--
+--  Parameters:
+--    This : in out UDC
+--       The USB Device Controller instance managing PMA and RAM buffer
+--       allocations.
+--
+--    Ep : EP_Addr
+--       The endpoint address (number and direction) for which the buffer is
+--       being allocated.
+--
+--    Len : USB.Packet_Size
+--       Size in bytes of both the MCU-facing buffer and the PMA hardware
+--       buffer.
+--
+--  Returns:
+--    System.Address
+--       The address of the allocated MCU-facing RAM buffer that the caller may
+--       use for reading or writing endpoint data.
+--
+--  Notes:
+--    This routine allocates both sides of the endpoint buffer pairing:
+--    hardware (PMA) and software (RAM). It must be called before endpoint
+--    transfers occur.
+-------------------------------------------------------------------------------
+
    function Request_Buffer
      (This : in out UDC; Ep : EP_Addr; Len : USB.Packet_Size)
       return System.Address
@@ -124,12 +187,58 @@ package body Stm32f0x0.USB_Device is
    end Request_Buffer;
 
    overriding --Valid_EP_Id
+   -------------------------------------------------------------------------------
+--  Valid_EP_Id
+--
+--  Returns True if the provided endpoint identifier is within the valid range
+--  supported by this USB Device Controller instance. Endpoint IDs are expected
+--  to be indexed from 0 up to Num_Endpoints - 1.
+--
+--  Parameters:
+--    This : in out UDC
+--       The USB Device Controller instance whose endpoint configuration limits
+--       are being checked.
+--
+--    EP : EP_Id
+--       The endpoint identifier to validate.
+--
+--  Returns:
+--    Boolean
+--       True if EP falls within the valid endpoint index range, False otherwise.
+--
+--  Notes:
+--    This performs a simple bounds check; it does not verify that the
+--    endpoint is configured or enabled, only that its numeric ID is legal.
+-------------------------------------------------------------------------------
+
    function Valid_EP_Id (This : in out UDC; EP : EP_Id) return Boolean is
    begin
       return Positive (EP) in 0 .. Num_Endpoints - 1;
    end Valid_EP_Id;
 
    overriding --Start
+   -------------------------------------------------------------------------------
+--  Start
+--
+--  Transitions the USB Device Controller into the operational state after it
+--  has been initialized. This procedure:
+--
+--    * Clears the USB reset condition (FRES)
+--    * Enables key USB interrupts (RESETM, SUSPM, WKUPM, CTRM)
+--    * Clears any pending interrupt status flags
+--    * Resets the BTABLE pointer to the beginning of Packet Memory
+--    * Enables the D+ pull-up resistor to signal Full-Speed presence to the host
+--
+--  Parameters:
+--    This : in out UDC
+--       The USB Device Controller instance being started.
+--
+--  Notes:
+--    This routine must be called after Initialize and after endpoint
+--    descriptors have been prepared. It effectively makes the device visible
+--    to the USB host and allows enumeration to begin.
+-------------------------------------------------------------------------------
+
    procedure Start (This : in out UDC) is
    begin
       --      StartLog ("> Start");
@@ -156,6 +265,32 @@ package body Stm32f0x0.USB_Device is
    end Start;
 
    overriding --Reset
+   -------------------------------------------------------------------------------
+--  Reset
+--
+--  Resets the USB Device Controller state after a USB bus reset event. This
+--  procedure:
+--
+--    * Clears and reinitializes all endpoint registers except endpoint 0
+--      (the control endpoint, which the hardware configures automatically
+--       during reset)
+--    * Forces all non-control endpoints into a disabled state by resetting
+--      their TX/RX status fields
+--    * Resets the internal buffer allocator state, preserving only the control
+--      endpoint's reserved buffers (BTABLE + EP0 RX/TX areas)
+--
+--  Parameters:
+--    This : in out UDC
+--       The USB Device Controller instance whose endpoints and buffer allocator
+--       are being reset.
+--
+--  Notes:
+--    This should be called when a USB reset interrupt occurs. It does not
+--    configure endpoint 0; hardware does that as part of the USB reset
+--    sequence. All other endpoints must be reconfigured by higher-level
+--    class or device code after this procedure runs.
+-------------------------------------------------------------------------------
+
    procedure Reset (This : in out UDC) is
    begin
       --      StartLog ("> Reset");
@@ -188,6 +323,33 @@ package body Stm32f0x0.USB_Device is
    end Reset;
 
    overriding --Poll
+   -------------------------------------------------------------------------------
+--  Poll
+--
+--  Processes pending USB interrupt events and returns a UDC_Event describing
+--  what occurred. This procedure inspects the USB ISTR register and handles:
+--
+--    * RESET events — clears the flag and reports a Device.Reset event
+--    * WAKEUP events — clears the flag and resumes from suspend
+--    * SUSPEND events — clears the flag
+--    * CTR (Correct Transfer) events:
+--        - SETUP packets on EP0
+--        - OUT (RX) transfers, copying data from PMA to user buffer
+--        - IN  (TX) transfers, acknowledging completion
+--
+--  Parameters:
+--    This : in out UDC
+--       The USB Device Controller instance to poll.
+--
+--  Returns:
+--    UDC_Event
+--       A description of the USB event that occurred, or No_Event if none.
+--
+--  Notes:
+--    Must be called regularly by the USB device driver task. This routine
+--    fully acknowledges IRQ flags in hardware.
+-------------------------------------------------------------------------------
+
    function Poll (This : in out UDC) return UDC_Event is
       --  Neutral ISTR register values
       Neutral_Istr : constant ISTR_Register :=
@@ -297,6 +459,30 @@ package body Stm32f0x0.USB_Device is
    end Poll;
 
    overriding --EP_Send_Packet
+   -------------------------------------------------------------------------------
+--  EP_Send_Packet
+--
+--  Sends data on an IN endpoint. This routine:
+--
+--    * Copies a user-provided buffer into the endpoint’s PMA TX buffer
+--    * Writes the packet length into the BTABLE entry
+--    * Sets STAT_TX to VALID, signaling hardware to send the data
+--
+--  Parameters:
+--    This : in out UDC
+--       USB Device Controller instance managing endpoint PMA buffers.
+--
+--    Ep : EP_Id
+--       The endpoint number to transmit on (must be an IN endpoint).
+--
+--    Len : USB.Packet_Size
+--       Size in bytes of the packet to transmit.
+--
+--  Notes:
+--    Raises Program_Error if the endpoint is already in VALID TX state,
+--    indicating a blocked/non-completed previous transmission.
+-------------------------------------------------------------------------------
+
    procedure EP_Send_Packet
      (This : in out UDC; Ep : EP_Id; Len : USB.Packet_Size)
    is
@@ -329,6 +515,31 @@ package body Stm32f0x0.USB_Device is
    end EP_Send_Packet;
 
    overriding --EP_Setup
+   -------------------------------------------------------------------------------
+--  EP_Setup
+--
+--  Configures the hardware registers and PMA buffer descriptors for a USB
+--  endpoint. This includes:
+--
+--    * Writing the BTABLE RX/TX addresses and buffer layout
+--    * Setting endpoint type (Control, Bulk, Interrupt, Isochronous)
+--    * Initializing DTOG bits, NAK state, and clearing CTR flags
+--    * Storing endpoint type and validity in EP_Status
+--
+--  Parameters:
+--    This : in out UDC
+--       The controller instance managing endpoint configuration.
+--
+--    EP : EP_Addr
+--       Endpoint number + direction (IN or OUT).
+--
+--    Typ : EP_Type
+--       USB endpoint transfer type.
+--
+--  Notes:
+--    Must be called after Request_Buffer and before enabling traffic.
+-------------------------------------------------------------------------------
+
    procedure EP_Setup (This : in out UDC; EP : EP_Addr; Typ : EP_Type) is
       UPR : EPR_Register renames EPRS (Ep.Num);
 
@@ -410,6 +621,31 @@ package body Stm32f0x0.USB_Device is
    end EP_Setup;
 
    overriding --EP_Ready_For_Data
+   -------------------------------------------------------------------------------
+--  EP_Ready_For_Data
+--
+--  Marks an OUT endpoint as ready (or not ready) to receive data. This sets:
+--
+--    * STAT_RX = VALID (0b11) when Ready = True
+--    * STAT_RX = NAK   (0b10) when Ready = False
+--
+--  Parameters:
+--    This  : in out UDC
+--       USB Device Controller instance.
+--
+--    EP    : EP_Id
+--       OUT endpoint number to modify.
+--
+--    Size  : USB.Packet_Size
+--       Unused here; kept for compatibility with generic HAL interface.
+--
+--    Ready : Boolean := True
+--       Whether to accept incoming packets or temporarily NAK them.
+--
+--  Notes:
+--    If the endpoint is already VALID, no changes occur.
+-------------------------------------------------------------------------------
+
    procedure EP_Ready_For_Data
      (This  : in out UDC;
       EP    : EP_Id;
@@ -447,6 +683,28 @@ package body Stm32f0x0.USB_Device is
    end EP_Ready_For_Data;
 
    overriding --EP_Stall
+   -------------------------------------------------------------------------------
+--  EP_Stall
+--
+--  Asserts or clears a STALL condition on an endpoint. This procedure:
+--
+--    * Sets STAT_TX or STAT_RX to STALL (1) depending on direction
+--    * When clearing a stall, resets DTOG bits for data toggle resynchronization
+--
+--  Parameters:
+--    This : in out UDC
+--       USB Device Controller instance.
+--
+--    EP : EP_Addr
+--       Endpoint number + direction.
+--
+--    Set : Boolean := True
+--       True to enter STALL, False to exit STALL.
+--
+--  Notes:
+--    Required for handling control request errors and class-specific stalls.
+-------------------------------------------------------------------------------
+
    procedure EP_Stall (This : in out UDC; EP : EP_Addr; Set : Boolean := True)
    is
       UPR : EPR_Register renames EPRS (Ep.Num);
@@ -481,6 +739,23 @@ package body Stm32f0x0.USB_Device is
    end EP_Stall;
 
    overriding --Set_Address
+   -------------------------------------------------------------------------------
+--  Set_Address
+--
+--  Writes the USB device address to the DADDR register and enables it.
+--
+--  Parameters:
+--    This : in out UDC
+--       Controller instance.
+--
+--    Addr : HAL.UInt7
+--       7-bit USB device address assigned by the host.
+--
+--  Notes:
+--    Executed at the correct stage of a SET_ADDRESS control request. Hardware
+--    takes effect only after the status stage completes.
+-------------------------------------------------------------------------------
+
    procedure Set_Address (This : in out UDC; Addr : HAL.UInt7) is
    begin
       --      StartLog ("> Set_Address " & Addr'Image);
@@ -491,17 +766,73 @@ package body Stm32f0x0.USB_Device is
    end Set_Address;
 
    overriding --Early_Address
+   -------------------------------------------------------------------------------
+--  Early_Address
+--
+--  Indicates whether the device applies the newly assigned address before the
+--  status stage of SET_ADDRESS. STM32F0 USB requires late address commit,
+--  so this always returns False.
+--
+--  Parameters:
+--    This : UDC
+--       The controller instance (not modified).
+--
+--  Returns:
+--    Boolean
+--       Always False.
+-------------------------------------------------------------------------------
+
    function Early_Address (This : UDC) return Boolean is
    begin
       return False;
    end Early_Address;
-
+ 
+   -------------------------------------------------------------------------------
+--  Send_Would_Block
+--
+--  Determines whether an IN endpoint is currently busy sending data. This
+--  returns True if STAT_TX = VALID (0b11), indicating the PMA buffer has not
+--  yet been consumed by hardware.
+--
+--  Parameters:
+--    This : UDC
+--       Controller instance.
+--
+--    Ep : EP_Id
+--       Endpoint number to check.
+--
+--  Returns:
+--    Boolean
+--       True if sending would block; False if a new packet may be queued.
+-------------------------------------------------------------------------------
    function Send_Would_Block (This : UDC; Ep : EP_Id) return Boolean is
       UPR : EPR_Register renames EPRS (Ep);
       Cur : constant EPR_Register := UPR;
    begin
       return Cur.STAT_TX = 3;
    end Send_Would_Block;
+
+------------------------------------------------------------------------------
+--  Allocate_Buffer
+--
+--  Allocates a region of Packet Memory (PMA) with 16-byte alignment, returning
+--  the offset from the base PMA address. This is used for endpoint RX/TX buffer
+--  assignment.
+--
+--  Parameters:
+--    This : in out UDC
+--       Controller instance tracking the next free PMA offset.
+--
+--    Size : Natural
+--       Requested PMA buffer size in bytes.
+--
+--  Returns:
+--    Packet_Buffer_Offset
+--       The aligned PMA offset allocated for this endpoint buffer.
+--
+--  Notes:
+--    This updates Next_Buffer and ensures 16-byte alignment required by ST’s PMA.
+-------------------------------------------------------------------------------
 
    function Allocate_Buffer
      (This : in out UDC; Size : Natural) return Packet_Buffer_Offset

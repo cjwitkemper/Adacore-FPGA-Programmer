@@ -14,7 +14,7 @@ procedure Rhit_Proj is
                (TX_Buffer_Size => 128, RX_Buffer_Size => 128);
 
    --  Create USB stack
-   Stack : USB.Device.USB_Device_Stack := ;
+   Stack : USB.Device.USB_Device_Stack := ; -- ??????? TODO ???????????????
 
    --  Initialization result
    Init_Result : USB.Device.Init_Result;
@@ -26,7 +26,7 @@ begin
    --  Register the Serial class with the stack
    Stack.Register_Class (Serial'Access);
 
-   --  Initialize the USB stack
+   --  Initialize the USB stack              !!!!!! TODO VERIFY STACK
    Init_Result :=
      Stack.Initialize
        (Controller   => UDC'Access,
@@ -38,7 +38,7 @@ begin
    if Init_Result /= USB.Device.Ok then
       --  Handle initialization error
       --  Maybe blink an LED or something
-      loop
+      loopdevice
          null;
       end loop;
    end if;
@@ -67,7 +67,7 @@ begin
          end;
       end if;
 
-      --  Small delay (1ms)
+      --  Small delay (1ms) Could mess with timing
       delay 0.001;
    end loop;
 end Rhit_Proj;
