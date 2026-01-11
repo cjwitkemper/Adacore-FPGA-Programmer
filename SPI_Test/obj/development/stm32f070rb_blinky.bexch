@@ -1,0 +1,27 @@
+[GENERATED OBJECT FILE]
+b__stm32f070rb_blinky.o
+[PROJECT FILES]
+/home/cwitkemper/Adacore-FPGA-Programmer/Blinky/stm32f070rb_blinky/stm32f070rb_blinky.gpr
+20251105181409 eaafea0ad1923d7233846b3b328a0901
+/home/cwitkemper/snap/code/209/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/gnat_user/light_tasking_stm32f0xx_config.gpr
+20251027214111 1cc3576bd488c016a7c4cff679ee9d36
+/home/cwitkemper/snap/code/209/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/runtime_build.gpr
+20251027214111 15ef97a3c47ce22f6f9f01ca185da130
+/home/cwitkemper/snap/code/209/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/target_options.gpr
+20251027214111 72e9f6650e38c4e293b3a7d4ff42aad1
+/home/cwitkemper/snap/code/209/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/ravenscar_build.gpr
+20251027214111 6d94f93484e28c83a76108eb738b2132
+/home/cwitkemper/Adacore-FPGA-Programmer/Blinky/stm32f070rb_blinky/config/stm32f070rb_blinky_config.gpr
+20251105181409 73d62e97e9b2d511342597f7e8b1d349
+[BOUND OBJECT FILES]
+/home/cwitkemper/Adacore-FPGA-Programmer/Blinky/stm32f070rb_blinky/obj/development/stm32f070rb_blinky.o
+[GENERATED SOURCE FILES]
+b__stm32f070rb_blinky.ads
+b__stm32f070rb_blinky.adb
+b__stm32f070rb_blinky.ali
+[RESULTING OPTIONS]
+-L/home/cwitkemper/Adacore-FPGA-Programmer/Blinky/stm32f070rb_blinky/obj/development/
+-L/home/cwitkemper/Adacore-FPGA-Programmer/Blinky/stm32f070rb_blinky/obj/development/
+-L/home/cwitkemper/snap/code/209/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/adalib/
+-static
+/home/cwitkemper/snap/code/209/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/adalib/libgnat.a
