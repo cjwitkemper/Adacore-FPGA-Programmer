@@ -18,6 +18,7 @@ procedure SPI_Master_Example is
    RXNE_Flag : constant Unsigned_16 := 16#0001#;
    TXE_Flag : constant Unsigned_16 := 16#0002#;
    BSY_Flag : constant Unsigned_16 := 16#0080#;
+
    Message  : constant String      := "Hello Arduino Uno";
    Delay_Counter : Unsigned_32 := 0 with Volatile;
    
@@ -35,11 +36,12 @@ procedure SPI_Master_Example is
       GPIOA_AFRL := GPIOA_AFRL and 16#000F_FFFF#;
 
       --  CR1: Master, Baud Rate
-      SPI1_CR1    := 16#033C#; --  Master, Slowest Clock
+      SPI1_CR1    := 16#033C#; --  Master, 256
       SPI1_CR2    := 16#1700#; --  8-bit mode
       SPI1_CR1    := SPI1_CR1 or 16#0040#; --  Enable
    end Initialize_SPI;
 
+   -- Checks sends and receives
    function Transceive (Data_Out : Unsigned_8) return Unsigned_8 is
       Received_Data : Unsigned_8;
    begin
@@ -58,7 +60,6 @@ procedure SPI_Master_Example is
       return Received_Data;
    end Transceive;
 
-   Trash : Unsigned_8;
 
    --  Procedure for sending a message
    procedure Send_Message (Str : String) is
