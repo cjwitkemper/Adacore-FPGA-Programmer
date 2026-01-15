@@ -1,5 +1,0 @@
-dependency:light_tasking_stm32f0xx=15.0.0=6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46
-external:LIBRARY_TYPE=default
-external:SPI_EXAMPLE_LIBRARY_TYPE=default
-profile:spi_example=DEVELOPMENT
-switches:spi_example=-Og,-fdata-sections,-ffunction-sections,-g,-gnatVa,-gnatW8,-gnatw.X,-gnatwa,-gnaty-d,-gnaty3,-gnatyA,-gnatyB,-gnatyI,-gnatyO,-gnatyS,-gnatya,-gnatyb,-gnatyc,-gnatye,-gnatyf,-gnatyh,-gnatyi,-gnatyk,-gnatyl,-gnatym,-gnatyn,-gnatyp,-gnatyr,-gnatyt,-gnatyu,-gnatyx
