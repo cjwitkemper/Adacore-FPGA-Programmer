@@ -2,7 +2,7 @@ with System; use System;
 with System.Storage_Elements; use System.Storage_Elements;
 with Interfaces; use Interfaces;
 
-procedure SPI_Master_Example is
+procedure spi_example is
 
    --  Register Definitions
    RCC_AHBENR  : Unsigned_32 with Address => To_Address (16#4002_1014#);
@@ -104,4 +104,4 @@ begin
       end loop;
    end loop;
 
-end SPI_Master_Example;
+end spi_example;
