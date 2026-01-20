@@ -46,12 +46,11 @@ procedure uart_example is
       GPIOA_AFRL := (GPIOA_AFRL and 16#0000_00FF#) or 16#0000_1100#;
 
       --  CR1: Master, Baud Rate
-      SPI1_CR1    := 16#033C#; --  Master, 256
+      SPI1_CR1    := 16#033C# or 16#0080#; --  Master, 256 LSB First
       SPI1_CR2    := 16#0700# or 16#1000#; --  8-bit mode
       SPI1_CR1    := SPI1_CR1 or 16#0040#; --  Enable
 
-      --  UART Config (115200 Baud @ 8MHz Clock)
-      --  USART2_BRR := 16#0045#; --  8,000,000 / 115,200 = 69 (0x45)
+      --  UART Config (115200 Baud @ 48MHz Clock)
       USART2_BRR := 16#01A1#; --  48,000,000 / 115,200 = 417 (0x1A1)
       USART2_CR1 := 16#0000_000D#;
 
