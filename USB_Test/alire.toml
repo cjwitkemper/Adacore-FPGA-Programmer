@@ -1,0 +1,30 @@
+name = "usb_example"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Olivier Henley"]
+maintainers = ["Olivier Henley <olivier.henley@gmail.com>"]
+maintainers-logins = ["ohenley"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["usb_example"]
+
+[[depends-on]]
+light_tasking_stm32f0xx = "*"
+embedded_components = "*"
+
+[[pins]]
+stm32f0x2_hal = { path = "../../stm32f0x2_hal-ada" }
+
+[configuration.values]
+light_tasking_stm32f0xx.MCU_Sub_Family            = "F070"
+light_tasking_stm32f0xx.MCU_Pin_Count             = "R"
+light_tasking_stm32f0xx.MCU_User_Code_Memory_Size = "B"
+
+light_tasking_stm32f0xx.SYSCLK_Src = "PLL"
+light_tasking_stm32f0xx.PLL_Src    = "HSI_2"
+light_tasking_stm32f0xx.PLLMUL     = 12
+light_tasking_stm32f0xx.AHB_Pre    = "DIV1"
+light_tasking_stm32f0xx.APB_Pre    = "DIV1"
