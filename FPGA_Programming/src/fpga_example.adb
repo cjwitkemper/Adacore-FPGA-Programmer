@@ -1,5 +1,7 @@
 with System; use System;
 with System.Storage_Elements; use System.Storage_Elements;
+with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Text_IO; use Ada.Text_IO;
 with Interfaces; use Interfaces;
 
 procedure FPGA_Programming is
@@ -14,6 +16,7 @@ procedure FPGA_Programming is
    GPIOA_BSRR  : Unsigned_32 with Address => To_Address (16#4800_0018#);
    GPIOA_AFRL  : Unsigned_32 with Address => To_Address (16#4800_0020#);
    GPIOA_IDR   : Unsigned_32 with Address => To_Address (16#4800_0010#);
+   GPIOA_PUPDR : Unsigned_32 with Address => To_Address(16#4800_000C#);
    --  SPI1
    SPI1_CR1    : Unsigned_16 with Address => To_Address (16#4001_3000#);
    SPI1_CR2    : Unsigned_16 with Address => To_Address (16#4001_3004#);
@@ -46,7 +49,7 @@ procedure FPGA_Programming is
 
       --  Clocks for GPIOA and SPI1 and USART2
       RCC_AHBENR  := RCC_AHBENR or 16#0002_0000#; --  GPIOA
-      RCC_APB2ENR := RCC_APB2ENR or 16#0000_1000#; --  SPI1 (bit 12)
+      --  RCC_APB2ENR := RCC_APB2ENR or 16#0000_1000#; --  SPI1 (bit 12)
       RCC_APB1ENR  := RCC_APB1ENR or 16#0002_0000#; --  USART2 (bit 17)
 
       --  Setting pins SPI(PA5,6,7) UART(PA2,PA3)
@@ -54,6 +57,9 @@ procedure FPGA_Programming is
 
       --  Select Alternate function for PA5, PA6, PA7
       GPIOA_AFRL := (GPIOA_AFRL and 16#FFFF_00FF#) or 16#0000_1100#;
+
+      --  PA6 to PUll-down
+      GPIOA_PUPDR := (GPIOA_PUPDR and 16#FFFF_CFFF#) or 16#0000_2000#;
 
       --  CR1: Master, Baud Rate
       SPI1_CR1    := 16#033C# or 16#0080#; --  Master, 256 LSB First
@@ -111,7 +117,7 @@ procedure FPGA_Programming is
       end loop;
    end Transmit_Hex_32;
 
-   type TMS_Array is array (1 .. 8) of Unsigned_8;
+   type TMS_Array is array (1 .. 9) of Unsigned_8;
    --  Combined JTAG transceive - sends 8 TMS bytes, then on clock 11+ sends TDI alongside TMS
    procedure JTAG_Sequence (
       TMS_Bytes : TMS_Array;
@@ -144,7 +150,7 @@ procedure FPGA_Programming is
             end if;
             
             --  Starting from clock cycle 11, also send TDI
-            if Clock_Cycle >= 11 and TDI_Bit_Index < TDI_Bits then
+            if Clock_Cycle > 10 and TDI_Bit_Index < TDI_Bits then
                TDI_Bit := Shift_Right (TDI_Data, TDI_Bit_Index) and 1;
                
                if TDI_Bit = 1 then
@@ -156,12 +162,12 @@ procedure FPGA_Programming is
                TDI_Bit_Index := TDI_Bit_Index + 1;
             end if;
             
-            for I in 1 .. 500 loop null; end loop;
+           
             --  Clock low (PA5)
             GPIOA_BSRR := Shift_Left (1, TCK_Pin + 16);
-            for I in 1 .. 500 loop null; end loop;
-            
-if Clock_Cycle >= 24 and Clock_Cycle < 55 then
+            delay until Clock + Nanoseconds(5000);
+--  WORKING CLOCK VALUES FOR TDO( 24 .. 55)            
+if Clock_Cycle >= 32 and Clock_Cycle < 61 then
 
     TDO_Bit := Shift_Right (GPIOA_IDR, TDO_Pin) and 1;
    --   TDO_Buffer := TDO_Buffer or Shift_Left(TDO_Bit, TDO_Bit_Count);
@@ -175,7 +181,7 @@ if Clock_Cycle >= 24 and Clock_Cycle < 55 then
 end if;
             --  Clock high (PA5)
             GPIOA_BSRR := Shift_Left (1, TCK_Pin);
-            
+            delay until Clock + Nanoseconds(5000);
 
             --  --  Read TDO on rising edge (PA6) - could store if needed
             --  TDO_Bit := Shift_Right (GPIOA_IDR, TDO_Pin) and 1;
@@ -192,62 +198,132 @@ end if;
             --     TDO_Bit_Count := 0;
             --  end if;
             
-            for I in 1 .. 500 loop null; end loop;
+            
          end loop;
       end loop;
    end JTAG_Sequence;
 
-procedure Read_IDCODE_Manual is
-   procedure Clock_TMS(TMS : Unsigned_32; TDI : Unsigned_32 := 0) is
+--  procedure Read_IDCODE_Manual is
+--     procedure Clock_TMS(TMS : Unsigned_32; TDI : Unsigned_32 := 0) is
+--     begin
+--        -- Set TMS
+--        if TMS = 1 then GPIOA_BSRR := Shift_Left(1, TMS_Pin);
+--        else GPIOA_BSRR := Shift_Left(1, TMS_Pin + 16); end if;
+--        -- Set TDI
+--        if TDI = 1 then GPIOA_BSRR := Shift_Left(1, TDI_Pin);
+--        else GPIOA_BSRR := Shift_Left(1, TDI_Pin + 16); end if;
+      
+--        for I in 1..500 loop null; end loop;
+--        GPIOA_BSRR := Shift_Left(1, TCK_Pin + 16); -- Clock Low
+--        for I in 1..500 loop null; end loop;
+--        GPIOA_BSRR := Shift_Left(1, TCK_Pin);      -- Clock High
+--     end Clock_TMS;
+
+--  begin
+--     Word := 0;
+--     -- 1. Reset
+--     for I in 1..5 loop Clock_TMS(1); end loop;
+--     -- 2. Idle
+--     Clock_TMS(0);
+--     -- 3. Move to Shift-IR (TMS: 1, 1, 0, 0)
+--     Clock_TMS(1); Clock_TMS(1); Clock_TMS(0); Clock_TMS(0);
+--     -- 4. Shift Instruction 0x11 (8 bits: 1, 0, 0, 0, 1, 0, 0, 0)
+--     -- Last bit must have TMS=1 to move to Exit1-IR
+--     Clock_TMS(0, 1); Clock_TMS(0, 0); Clock_TMS(0, 0); Clock_TMS(0, 0);
+--     Clock_TMS(0, 1); Clock_TMS(0, 0); Clock_TMS(0, 0); Clock_TMS(1, 0);
+--     -- 5. Move to Shift-DR (Update-IR -> SelDR -> CapDR -> ShiftDR) (TMS: 1, 1, 0, 0)
+--     Clock_TMS(1); Clock_TMS(1); Clock_TMS(0); Clock_TMS(0);
+--     -- 6. Read 32 bits
+--  for I in 0 .. 31 loop
+--     -- Force TDI Low (PA7)
+--     GPIOA_BSRR := Shift_Left(1, TDI_Pin + 16); 
+   
+--     -- Clock Low
+--     GPIOA_BSRR := Shift_Left(1, TCK_Pin + 16);
+--     for J in 1 .. 1000 loop null; end loop;
+
+--     -- Read TDO
+--     if (Shift_Right(GPIOA_IDR, TDO_Pin) and 1) = 1 then
+--        Transmit_UART(Character'Pos('#'));
+--     else
+--        Transmit_UART(Character'Pos('.'));
+--     end if;
+
+--     -- Clock High
+--     GPIOA_BSRR := Shift_Left(1, TCK_Pin);
+--     for J in 1 .. 1000 loop null; end loop;
+--  end loop;
+--  end Read_IDCODE_Manual;
+
+procedure Read_ID_Final is
+   -- Use a very slow toggle to be sure
+   procedure TCK_Step(TMS : Unsigned_32; TDI : Unsigned_32) is
    begin
-      -- Set TMS
+      -- Set TMS/TDI
       if TMS = 1 then GPIOA_BSRR := Shift_Left(1, TMS_Pin);
       else GPIOA_BSRR := Shift_Left(1, TMS_Pin + 16); end if;
-      -- Set TDI
+      
       if TDI = 1 then GPIOA_BSRR := Shift_Left(1, TDI_Pin);
       else GPIOA_BSRR := Shift_Left(1, TDI_Pin + 16); end if;
-      
-      for I in 1..500 loop null; end loop;
-      GPIOA_BSRR := Shift_Left(1, TCK_Pin + 16); -- Clock Low
-      for I in 1..500 loop null; end loop;
-      GPIOA_BSRR := Shift_Left(1, TCK_Pin);      -- Clock High
-   end Clock_TMS;
+
+      for J in 1 .. 1000 loop null; end loop;
+      GPIOA_BSRR := Shift_Left(1, TCK_Pin + 16); -- TCK Low
+      for J in 1 .. 1000 loop null; end loop;
+      GPIOA_BSRR := Shift_Left(1, TCK_Pin);      -- TCK High
+   end TCK_Step;
 
 begin
    Word := 0;
-   -- 1. Reset
-   for I in 1..5 loop Clock_TMS(1); end loop;
-   -- 2. Idle
-   Clock_TMS(0);
-   -- 3. Move to Shift-IR (TMS: 1, 1, 0, 0)
-   Clock_TMS(1); Clock_TMS(1); Clock_TMS(0); Clock_TMS(0);
-   -- 4. Shift Instruction 0x11 (8 bits: 1, 0, 0, 0, 1, 0, 0, 0)
-   -- Last bit must have TMS=1 to move to Exit1-IR
-   Clock_TMS(0, 1); Clock_TMS(0, 0); Clock_TMS(0, 0); Clock_TMS(0, 0);
-   Clock_TMS(0, 1); Clock_TMS(0, 0); Clock_TMS(0, 0); Clock_TMS(1, 0);
-   -- 5. Move to Shift-DR (Update-IR -> SelDR -> CapDR -> ShiftDR) (TMS: 1, 1, 0, 0)
-   Clock_TMS(1); Clock_TMS(1); Clock_TMS(0); Clock_TMS(0);
-   -- 6. Read 32 bits
-for I in 0 .. 31 loop
-   -- Force TDI Low (PA7)
-   GPIOA_BSRR := Shift_Left(1, TDI_Pin + 16); 
-   
-   -- Clock Low
-   GPIOA_BSRR := Shift_Left(1, TCK_Pin + 16);
-   for J in 1 .. 1000 loop null; end loop;
 
-   -- Read TDO
-   if (Shift_Right(GPIOA_IDR, TDO_Pin) and 1) = 1 then
-      Transmit_UART(Character'Pos('#'));
-   else
-      Transmit_UART(Character'Pos('.'));
-   end if;
+   -- 1. Reset TAP: 8 clocks with TMS=1 ensures we are in Test-Logic-Reset
+   for I in 1 .. 8 loop TCK_Step(1, 0); end loop;
 
-   -- Clock High
-   GPIOA_BSRR := Shift_Left(1, TCK_Pin);
-   for J in 1 .. 1000 loop null; end loop;
-end loop;
-end Read_IDCODE_Manual;
+   -- 2. Move to Shift-IR: TMS Sequence 0 -> 1 -> 1 -> 0 -> 0
+   TCK_Step(0, 0); -- Run-Test/Idle
+   TCK_Step(1, 0); -- Select-DR-Scan
+   TCK_Step(1, 0); -- Select-IR-Scan
+   TCK_Step(0, 0); -- Capture-IR
+   TCK_Step(0, 0); -- Shift-IR
+
+   -- 3. Shift in IDCODE Command: 0x11 (8 bits, LSB first: 1,0,0,0,1,0,0,0)
+   -- Shift first 7 bits
+   TCK_Step(0, 1); TCK_Step(0, 0); TCK_Step(0, 0); TCK_Step(0, 0);
+   TCK_Step(0, 1); TCK_Step(0, 0); TCK_Step(0, 0);
+   -- 8th bit: TMS=1 to move to Exit1-IR
+   TCK_Step(1, 0); 
+
+   -- 4. Move to Shift-DR: TMS Sequence 1 -> 1 -> 0 -> 0
+   TCK_Step(1, 0); -- Update-IR
+   TCK_Step(1, 0); -- Select-DR-Scan
+   TCK_Step(0, 0); -- Capture-DR
+   TCK_Step(0, 0); -- Shift-DR
+
+   -- 5. Read 32 bits
+   for I in 0 .. 31 loop
+      -- Pull TCK Low
+      GPIOA_BSRR := Shift_Left(1, TCK_Pin + 16);
+      for J in 1 .. 1000 loop null; end loop;
+
+      -- Sample TDO
+      if (Shift_Right(GPIOA_IDR, TDO_Pin) and 1) = 1 then
+         Word := Word or Shift_Left(1, I);
+      end if;
+
+      -- Pull TCK High
+      -- On bit 31, set TMS=1 to exit Shift-DR
+      if I = 31 then
+         GPIOA_BSRR := Shift_Left(1, TMS_Pin);
+      end if;
+      
+      GPIOA_BSRR := Shift_Left(1, TCK_Pin);
+      for J in 1 .. 1000 loop null; end loop;
+   end loop;
+
+   -- 6. Clean up to Idle
+   TCK_Step(1, 0); -- Update-DR
+   TCK_Step(0, 0); -- Run-Test/Idle
+end Read_ID_Final;
+
 
    function Data_Available_UART return Boolean is
    begin
@@ -272,32 +348,38 @@ end Read_IDCODE_Manual;
 begin
    Initialize_Hardware;
    
-   --  TMS_Sequence(1) := 16#07#;
-   --  TMS_Sequence(2) := 16#D8#;
-   --  TMS_Sequence(3) := 16#03#;
-   --  TMS_Sequence(4) := 16#08#;
+   --  TEMP: SEQUENCE WILL HAVE 2 of the data register 0s
+
+   --  WORKING SEQUENCE (OUTPUT: 0x000001FE)
+   --  TMS_Sequence(1) := 16#FB#;
+   --  TMS_Sequence(2) := 16#00#;
+   --  TMS_Sequence(3) := 16#7C#;
+   --  TMS_Sequence(4) := 16#20#;
    --  TMS_Sequence(5) :=16#00#;
    --  TMS_Sequence(6) := 16#00#;
    --  TMS_Sequence(7) := 16#00#;
-   --  TMS_Sequence(8) := 16#02#;
+   --  TMS_Sequence(8) := 16#0F#;
+   --  TMS_Sequence(9) := 16#80#;
 
-   TMS_Sequence(1) := 16#1F#;
-   TMS_Sequence(2) := 16#0C#;
-   TMS_Sequence(3) := 16#80#;
-   TMS_Sequence(4) := 16#03#;
+   --  TMS_Sequence(1) := 16#01#;
+   TMS_Sequence(1) := 16#DF#;
+   TMS_Sequence(2) := 16#00#;
+   TMS_Sequence(3) := 16#3E#;
+   TMS_Sequence(4) := 16#10#;
    TMS_Sequence(5) :=16#00#;
    TMS_Sequence(6) := 16#00#;
    TMS_Sequence(7) := 16#00#;
-   TMS_Sequence(8) := 16#01#;
+   TMS_Sequence(8) := 16#C0#;
+   TMS_Sequence(9) := 16#07#;
 
-   TDI_1 := 16#44#;
-
-   --  JTAG_Sequence (TMS_Sequence, TDI_1, 8);
-   Read_IDCODE_Manual;
-   --  loop
-   --     Transmit_Hex_32 (Word);
-   --     for I in 1 .. 1000000 loop null; end loop;
-   --  end loop;
+   TDI_1 := 16#11#;
+   --  Ada.Text_IO.Put_Line(Ada.Real_Time.Clock);
+   JTAG_Sequence (TMS_Sequence, TDI_1, 8);
+   --  Read_ID_Final;
+   loop
+      Transmit_Hex_32 (Word);
+      delay until Clock + Milliseconds(1000);
+   end loop;
 
    --  --  If this is the first byte of a stream, pull CS low
    --     if not In_Transfer then
