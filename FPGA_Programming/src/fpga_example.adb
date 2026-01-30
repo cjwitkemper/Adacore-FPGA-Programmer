@@ -4,6 +4,7 @@ with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Text_IO; use Ada.Text_IO;
 with Interfaces; use Interfaces;
 
+
 procedure FPGA_Programming is
 
    --  Register Definitions
@@ -17,6 +18,9 @@ procedure FPGA_Programming is
    GPIOA_AFRL  : Unsigned_32 with Address => To_Address (16#4800_0020#);
    GPIOA_IDR   : Unsigned_32 with Address => To_Address (16#4800_0010#);
    GPIOA_PUPDR : Unsigned_32 with Address => To_Address(16#4800_000C#);
+   --  GPIOB
+   GPIOB_MODER   : Unsigned_32 with Address => To_Address(16#4800_0400#);
+   GPIOB_AFRL    : Unsigned_32 with Address => To_Address(16#4800_0420#);
    --  SPI1
    SPI1_CR1    : Unsigned_16 with Address => To_Address (16#4001_3000#);
    SPI1_CR2    : Unsigned_16 with Address => To_Address (16#4001_3004#);
@@ -28,6 +32,20 @@ procedure FPGA_Programming is
    USART2_ISR  : Unsigned_32 with Address => To_Address (16#4000_441C#);
    USART2_RDR  : Unsigned_8  with Address => To_Address (16#4000_4424#);
    USART2_TDR  : Unsigned_32  with Address => To_Address (16#4000_4428#);
+
+   --  Timer 3 Registers
+   TIM3_CR1   : Unsigned_32 with Address => To_Address(16#4000_0400#);
+   TIM3_CCMR2 : Unsigned_32 with Address => To_Address(16#4000_041C#);
+   TIM3_CCER  : Unsigned_32 with Address => To_Address(16#4000_0420#);
+   TIM3_PSC   : Unsigned_32 with Address => To_Address(16#4000_0428#);
+   TIM3_ARR   : Unsigned_32 with Address => To_Address(16#4000_042C#);
+   TIM3_CCR3  : Unsigned_32 with Address => To_Address(16#4000_043C#);
+   TIM3_EGR   : Unsigned_32 with Address => To_Address(16#4000_0414#);
+   TIM3_DIER    : Unsigned_32 with Address => To_Address(16#4000_040C#);
+   TIM3_SR      : Unsigned_32 with Address => To_Address(16#4000_0410#);
+
+   -- NVIC registers (specific to Cortex-M0)
+NVIC_ISER    : Unsigned_32 with Address => To_Address(16#E000_E100#);   
 
    TMS_Pin : constant := 4; -- PA4
    TCK_Pin : constant := 5; -- PA5
@@ -48,9 +66,9 @@ procedure FPGA_Programming is
    begin
 
       --  Clocks for GPIOA and SPI1 and USART2
-      RCC_AHBENR  := RCC_AHBENR or 16#0002_0000#; --  GPIOA
+      RCC_AHBENR  := RCC_AHBENR or 16#0006_0000#; --  GPIOA
       --  RCC_APB2ENR := RCC_APB2ENR or 16#0000_1000#; --  SPI1 (bit 12)
-      RCC_APB1ENR  := RCC_APB1ENR or 16#0002_0000#; --  USART2 (bit 17)
+      RCC_APB1ENR  := RCC_APB1ENR or 16#0002_0002#; --  USART2 (bit 17)
 
       --  Setting pins SPI(PA5,6,7) UART(PA2,PA3)
       GPIOA_MODER := (GPIOA_MODER and 16#FFFF_000F#) or 16#0000_45A0#;
@@ -69,6 +87,26 @@ procedure FPGA_Programming is
       --  UART Config (115200 Baud @ 48MHz Clock)
       USART2_BRR := 16#01A1#; --  48,000,000 / 115,200 = 417 (0x1A1)
       USART2_CR1 := 16#0000_000D#;
+
+      GPIOB_MODER := (GPIOB_MODER and not 16#0000_0003#) or 16#0000_0002#;
+      -- AFRL: Set AF1 (0001) for Pin 0
+      GPIOB_AFRL  := (GPIOB_AFRL and not 16#0000_000F#) or 16#0000_0001#;
+
+      -- 3. Configure Timer 3
+      TIM3_PSC := 0;      -- Prescaler
+      TIM3_ARR := 999;    -- Auto-reload (1kHz frequency)
+      TIM3_CCR3 := 500;   -- 50% Duty Cycle initial value
+
+      -- 4. Configure Channel 3 for PWM Mode 1
+      -- CCMR2: OC3M bits (bits 4-6) to 110 (PWM mode 1), OC3PE (bit 3) to 1 (Preload enable)
+      TIM3_CCMR2 := (TIM3_CCMR2 and not 16#0000_0070#) or 16#0000_0068#;
+
+      -- 5. Enable Output for Channel 3
+      TIM3_CCER := TIM3_CCER or 16#0000_0100#; -- CC3E bit
+
+      -- 6. Initialize registers and start timer
+      TIM3_EGR := 16#0001#; -- Update Generation (UG bit)
+      TIM3_CR1 := TIM3_CR1 or 16#0001#; -- CEN (Counter Enable)
 
       --  Set CS High initially
       GPIOA_BSRR := 16#0000_0010#;
@@ -117,7 +155,8 @@ procedure FPGA_Programming is
       end loop;
    end Transmit_Hex_32;
 
-   type TMS_Array is array (1 .. 9) of Unsigned_8;
+   type TMS_Array is array (0 .. 9) of Unsigned_8;
+   x : Unsigned_32;
    --  Combined JTAG transceive - sends 8 TMS bytes, then on clock 11+ sends TDI alongside TMS
    procedure JTAG_Sequence (
       TMS_Bytes : TMS_Array;
@@ -137,20 +176,16 @@ procedure FPGA_Programming is
       TDO_Bit_Count := 0;
       for Byte_Index in TMS_Bytes'Range loop
          for Bit_Index in 0 .. 7 loop
+            while(TIM3_SR and 16#0001#) = 0 loop
+               x := x+1;
+            end loop;
+
+            TIM3_SR := TIM3_SR and not 16#0001#;
+
             Clock_Cycle := Clock_Cycle + 1;
             
-            --  Extract TMS bit
-            TMS_Bit := Shift_Right (TMS_Bytes(Byte_Index), Bit_Index) and 1;
-            
-            --  Set TMS pin (PA4)
-            if TMS_Bit = 1 then
-               GPIOA_BSRR := Shift_Left (1, TMS_Pin);
-            else
-               GPIOA_BSRR := Shift_Left (1, TMS_Pin + 16);
-            end if;
-            
             --  Starting from clock cycle 11, also send TDI
-            if Clock_Cycle > 10 and TDI_Bit_Index < TDI_Bits then
+            if Clock_Cycle > 18 and TDI_Bit_Index < TDI_Bits then
                TDI_Bit := Shift_Right (TDI_Data, TDI_Bit_Index) and 1;
                
                if TDI_Bit = 1 then
@@ -164,10 +199,21 @@ procedure FPGA_Programming is
             
            
             --  Clock low (PA5)
-            GPIOA_BSRR := Shift_Left (1, TCK_Pin + 16);
-            delay until Clock + Nanoseconds(5000);
+            --  delay until Clock + Nanoseconds(2500);
+            --  GPIOA_BSRR := Shift_Left (1, TCK_Pin + 16);
 --  WORKING CLOCK VALUES FOR TDO( 24 .. 55)            
-if Clock_Cycle >= 32 and Clock_Cycle < 61 then
+            
+            --  Extract TMS bit
+            TMS_Bit := Shift_Right (TMS_Bytes(Byte_Index), Bit_Index) and 1;
+            
+            --  Set TMS pin (PA4)
+            if TMS_Bit = 1 then
+               GPIOA_BSRR := Shift_Left (1, TMS_Pin);
+            else
+               GPIOA_BSRR := Shift_Left (1, TMS_Pin + 16);
+            end if;
+         
+if Clock_Cycle >= 40 and Clock_Cycle < 72 then
 
     TDO_Bit := Shift_Right (GPIOA_IDR, TDO_Pin) and 1;
    --   TDO_Buffer := TDO_Buffer or Shift_Left(TDO_Bit, TDO_Bit_Count);
@@ -180,8 +226,8 @@ if Clock_Cycle >= 32 and Clock_Cycle < 61 then
     end if;
 end if;
             --  Clock high (PA5)
-            GPIOA_BSRR := Shift_Left (1, TCK_Pin);
-            delay until Clock + Nanoseconds(5000);
+            --  delay until Clock + Nanoseconds(2500);
+            --  GPIOA_BSRR := Shift_Left (1, TCK_Pin);
 
             --  --  Read TDO on rising edge (PA6) - could store if needed
             --  TDO_Bit := Shift_Right (GPIOA_IDR, TDO_Pin) and 1;
@@ -362,6 +408,7 @@ begin
    --  TMS_Sequence(9) := 16#80#;
 
    --  TMS_Sequence(1) := 16#01#;
+   TMS_Sequence(0) := 16#00#;
    TMS_Sequence(1) := 16#DF#;
    TMS_Sequence(2) := 16#00#;
    TMS_Sequence(3) := 16#3E#;
@@ -376,6 +423,8 @@ begin
    --  Ada.Text_IO.Put_Line(Ada.Real_Time.Clock);
    JTAG_Sequence (TMS_Sequence, TDI_1, 8);
    --  Read_ID_Final;
+   --  System_Clock : = HAL.RCC.SystemCoreClock;
+   --  Ada.Text_IO.Put_Line("System Clock: " 7Integer'im)
    loop
       Transmit_Hex_32 (Word);
       delay until Clock + Milliseconds(1000);
