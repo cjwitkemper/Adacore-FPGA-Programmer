@@ -1,9 +1,13 @@
 with System; use System;
 with System.Storage_Elements; use System.Storage_Elements;
 with Interfaces; use Interfaces;
+with STM32F0x0;
+with STM32F0x0.RCC; use STM32F0x0.RCC;
+with STM32F0x0.GPIO; use STM32F0x0.GPIO;
+with STM32F0x0.SPI; use STM32F0x0.SPI;
+with STM32F0x0.USART; use STM32F0x0.USART;
 
 procedure uart_example is
-
    --  Register Definitions
    --  RCC
    RCC_AHBENR  : Unsigned_32 with Address => To_Address (16#4002_1014#);
@@ -13,6 +17,9 @@ procedure uart_example is
    GPIOA_MODER : Unsigned_32 with Address => To_Address (16#4800_0000#);
    GPIOA_BSRR  : Unsigned_32 with Address => To_Address (16#4800_0018#);
    GPIOA_AFRL  : Unsigned_32 with Address => To_Address (16#4800_0020#);
+   --  GPIOB
+   GPIOB_MODER : Unsigned_32 with Address => To_Address (16#4800_0400#);
+   GPIOB_BSRR  : Unsigned_32 with Address => To_Address (16#4800_0418#);
    --  SPI1
    SPI1_CR1    : Unsigned_16 with Address => To_Address (16#4001_3000#);
    SPI1_CR2    : Unsigned_16 with Address => To_Address (16#4001_3004#);
@@ -30,12 +37,10 @@ procedure uart_example is
    BSY_Flag : constant Unsigned_16 := 16#0080#;
    USART_RXNE : constant Unsigned_32 := 16#0000_0020#; --  Bit 5 in ISR
 
-   --  Setting GPIO
    procedure Initialize_Hardware is
    begin
-
       --  Clocks for GPIOA and SPI1 and USART2
-      RCC_AHBENR  := RCC_AHBENR or 16#0002_0000#; --  GPIOA
+      RCC_AHBENR  := RCC_AHBENR or 16#0006_0000#; --  GPIOA & GPIOB (bits 17 & 18)
       RCC_APB2ENR := RCC_APB2ENR or 16#0000_1000#; --  SPI1 (bit 12)
       RCC_APB1ENR  := RCC_APB1ENR or 16#0002_0000#; --  USART2 (bit 17)
 
@@ -44,6 +49,12 @@ procedure uart_example is
 
       --  Select Alternate function for PA5, PA6, PA7
       GPIOA_AFRL := (GPIOA_AFRL and 16#0000_00FF#) or 16#0000_1100#;
+
+      --  Configure PB3, PB4, PB5 as General Purpose Output (01)
+      GPIOB_MODER := (GPIOB_MODER and 16#FFFF_F03F#) or 16#0000_0540#;
+
+      --  Set PB3 HIGH, PB4 and PB5 LOW
+      GPIOB_BSRR := 16#0030_0008#;
 
       --  CR1: Master, Baud Rate
       SPI1_CR1    := 16#033C# or 16#0080#; --  Master, 256 LSB First
