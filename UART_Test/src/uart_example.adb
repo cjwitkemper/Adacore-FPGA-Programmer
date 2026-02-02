@@ -1,91 +1,96 @@
 with System; use System;
 with System.Storage_Elements; use System.Storage_Elements;
 with Interfaces; use Interfaces;
-with STM32F0x0;
+with STM32F0x0; use STM32F0x0;
 with STM32F0x0.RCC; use STM32F0x0.RCC;
 with STM32F0x0.GPIO; use STM32F0x0.GPIO;
 with STM32F0x0.SPI; use STM32F0x0.SPI;
 with STM32F0x0.USART; use STM32F0x0.USART;
 
 procedure uart_example is
-   --  Register Definitions
-   --  RCC
-   RCC_AHBENR  : Unsigned_32 with Address => To_Address (16#4002_1014#);
-   RCC_APB2ENR : Unsigned_32 with Address => To_Address (16#4002_1018#);
-   RCC_APB1ENR : Unsigned_32 with Address => To_Address (16#4002_101C#);
-   --  GPIOA
-   GPIOA_MODER : Unsigned_32 with Address => To_Address (16#4800_0000#);
-   GPIOA_BSRR  : Unsigned_32 with Address => To_Address (16#4800_0018#);
-   GPIOA_AFRL  : Unsigned_32 with Address => To_Address (16#4800_0020#);
-   --  GPIOB
-   GPIOB_MODER : Unsigned_32 with Address => To_Address (16#4800_0400#);
-   GPIOB_BSRR  : Unsigned_32 with Address => To_Address (16#4800_0418#);
-   --  SPI1
-   SPI1_CR1    : Unsigned_16 with Address => To_Address (16#4001_3000#);
-   SPI1_CR2    : Unsigned_16 with Address => To_Address (16#4001_3004#);
-   SPI1_SR     : Unsigned_16 with Address => To_Address (16#4001_3008#);
-   SPI1_DR     : Unsigned_8  with Address => To_Address (16#4001_300C#);
-   --  USART2
-   USART2_CR1  : Unsigned_32 with Address => To_Address (16#4000_4400#);
-   USART2_BRR  : Unsigned_32 with Address => To_Address (16#4000_440C#);
-   USART2_ISR  : Unsigned_32 with Address => To_Address (16#4000_441C#);
-   USART2_RDR  : Unsigned_8  with Address => To_Address (16#4000_4424#);
-
-   --  Flags
-   RXNE_Flag : constant Unsigned_16 := 16#0001#;
-   TXE_Flag : constant Unsigned_16 := 16#0002#;
-   BSY_Flag : constant Unsigned_16 := 16#0080#;
-   USART_RXNE : constant Unsigned_32 := 16#0000_0020#; --  Bit 5 in ISR
 
    procedure Initialize_Hardware is
    begin
-      --  Clocks for GPIOA and SPI1 and USART2
-      RCC_AHBENR  := RCC_AHBENR or 16#0006_0000#; --  GPIOA & GPIOB (bits 17 & 18)
-      RCC_APB2ENR := RCC_APB2ENR or 16#0000_1000#; --  SPI1 (bit 12)
-      RCC_APB1ENR  := RCC_APB1ENR or 16#0002_0000#; --  USART2 (bit 17)
+      --  Enable GPIOA and GPIOB
+      RCC_Periph.AHBENR.IOPAEN := 1;
+      RCC_Periph.AHBENR.IOPBEN := 1;
 
-      --  Setting pins SPI(PA5,6,7) UART(PA2,PA3)
-      GPIOA_MODER := (GPIOA_MODER and 16#FFFF_000F#) or 16#0000_A9A0#;
+      --  Enable SPI1 and USART2
+      RCC_Periph.APB2ENR.SPI1EN := 1;
+      RCC_Periph.APB1ENR.USART2EN := 1;
+      
+      --  PA5, PA6, PA7 (SPI) and PA2, PA3 (UART)
+      GPIOA_Periph.MODER := (As_Array => True,
+                             Arr      => (2 | 3 | 5 | 6 | 7 => 2,
+                                          4 => 1,
+                                          others => 0));
 
-      --  Select Alternate function for PA5, PA6, PA7
-      GPIOA_AFRL := (GPIOA_AFRL and 16#0000_00FF#) or 16#0000_1100#;
+      --  Set Alternate function for PA5, PA6, PA7 (AF0 for SPI1 on F070)
+      GPIOA_Periph.AFRL := (As_Array => True,
+                            Arr      => (2 | 3 => 1, -- AF1 for USART2
+                                         5 | 6 | 7 => 0, -- AF0 for SPI1
+                                         others => 0));
 
-      --  Configure PB3, PB4, PB5 as General Purpose Output (01)
-      GPIOB_MODER := (GPIOB_MODER and 16#FFFF_F03F#) or 16#0000_0540#;
+      --  Set PB3, PB4, and PB5 as General Purpose Output (Value 1)
+      GPIOB_Periph.MODER := (As_Array => True, 
+                          Arr      => (3 => 1, others => 0));
 
-      --  Set PB3 HIGH, PB4 and PB5 LOW
-      GPIOB_BSRR := 16#0030_0008#;
+      -- Set  PB3 High and PB4, PB5 Low
+      GPIOB_Periph.BSRR := (BS => (As_Array => True, Arr => (3 => 1, others => 0)),
+                         BR => (As_Array => True, Arr => (others => 0)));  
 
-      --  CR1: Master, Baud Rate
-      SPI1_CR1    := 16#033C# or 16#0080#; --  Master, 256 LSB First
-      SPI1_CR2    := 16#0700# or 16#1000#; --  8-bit mode
-      SPI1_CR1    := SPI1_CR1 or 16#0040#; --  Enable
+      --  PI1 Configuration (SVD Record)
+      --  CR1: Master mode, Baud rate div 256, Software Slave Mgmt, Internal Slave Select
+      SPI1_Periph.CR1 := (MSTR     => 1,
+                          BR       => 7, -- F_PCLK / 256
+                          LSBFIRST => 1,
+                          SSM      => 1,
+                          SSI      => 1,
+                          others   => <>);
 
-      --  UART Config (115200 Baud @ 48MHz Clock)
-      USART2_BRR := 16#01A1#; --  48,000,000 / 115,200 = 417 (0x1A1)
-      USART2_CR1 := 16#0000_000D#;
+      --  CR2: 8-bit Data Size (7 is 8-bit), FRXTH must be 1 for 8-bit/Byte access
+      SPI1_Periph.CR2 := (DS       => 7,
+                          FRXTH    => 1,
+                          others   => <>);
 
-      --  Set CS High initially
-      GPIOA_BSRR := 16#0000_0010#;
+      -- USART2 Configuration (115200 Baud @ 48MHz)
+      -- 16#01A1# -> Mantissa 26 (16#1A#), Fraction 1
+      USART2_Periph.BRR := (DIV_Mantissa => 16#1A#,
+                            DIV_Fraction => 1,
+                            others       => <>);
+
+      -- Enable UART, Transmit, and Receive
+      USART2_Periph.CR1 := (UE     => 1,
+                            TE     => 1,
+                            RE     => 1,
+                            others => <>);
+
+      --  Initial CS High (PA4)
+      GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
+                            BR => (As_Array => True, Arr => (others => 0)));
    end Initialize_Hardware;
 
    --  Checks sends and receives
    function Transceive (Data_Out : Unsigned_8) return Unsigned_8 is
    begin
-      while (SPI1_SR and TXE_Flag) = 0 loop null; end loop;
-      SPI1_DR := Data_Out;
-      while (SPI1_SR and RXNE_Flag) = 0 loop null; end loop;
-      return SPI1_DR;
+      -- Comparison with 0 now works because 'use STM32F0x0' is present
+      while SPI1_Periph.SR.TXE = 0 loop null; end loop;
+      
+      SPI1_Periph.DR.DR := DR_DR_Field (Data_Out);
+      
+      while SPI1_Periph.SR.RXNE = 0 loop null; end loop;
+      
+      return Unsigned_8 (SPI1_Periph.DR.DR);
    end Transceive;
 
    function Data_Available_UART return Boolean is
    begin
-      return (USART2_ISR and USART_RXNE) /= 0;
+      return USART2_Periph.ISR.RXNE /= 0;
    end Data_Available_UART;
 
    function Receive_UART return Unsigned_8 is
    begin
-      return USART2_RDR;
+      return Unsigned_8 (USART2_Periph.RDR.RDR);
    end Receive_UART;
 
    Incoming_Byte : Unsigned_8;
@@ -103,7 +108,9 @@ begin
 
          --  If this is the first byte of a stream, pull CS low
          if not In_Transfer then
-            GPIOA_BSRR := 16#0010_0000#; -- CS Low (PA4)
+            -- CS Low (PA4)
+            GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (others => 0)),
+                                  BR => (As_Array => True, Arr => (4 => 1, others => 0)));
             In_Transfer := True;
          end if;
 
@@ -119,9 +126,11 @@ begin
             --  Small artificial delay to define "End of File"
             if Timeout_Count > 50_000 then
                --  Wait for SPI to finish last bits
-               while (SPI1_SR and BSY_Flag) /= 0 loop null; end loop;
+               while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
 
-               GPIOA_BSRR := 16#0000_0010#; -- CS High (PA4)
+               -- CS High (PA4)
+               GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
+                                     BR => (As_Array => True, Arr => (others => 0)));
                In_Transfer := False;
                Timeout_Count := 0;
             end if;
