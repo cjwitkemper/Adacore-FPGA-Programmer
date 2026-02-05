@@ -3,6 +3,8 @@ with STM32F0x0.RCC; use STM32F0x0.RCC;
 with STM32F0x0.GPIO; use STM32F0x0.GPIO;
 with STM32F0x0.SPI; use STM32F0x0.SPI;
 with STM32F0x0.USART; use STM32F0x0.USART;
+with Ada.Real_Time; use Ada.Real_Time;
+with system;
 
 procedure uart_example is
 
@@ -69,15 +71,17 @@ procedure uart_example is
 
    --  Checks sends and receives
    function Transceive (Data_Out : Byte) return Byte is
+   --  Dummy : Byte;
+   DR_8 : Byte with Address => SPI1_Periph.DR'Address;
    begin
-      -- Comparison with 0 now works because 'use STM32F0x0' is present
       while SPI1_Periph.SR.TXE = 0 loop null; end loop;
-
-      SPI1_Periph.DR.DR := DR_DR_Field (Data_Out);
-
+      --  SPI1_Periph.DR.DR := DR_DR_Field (Data_Out);
+      DR_8 := Data_Out;
       while SPI1_Periph.SR.RXNE = 0 loop null; end loop;
-
-      return Byte (SPI1_Periph.DR.DR);
+      --  Dummy := Byte (SPI1_Periph.DR.DR);
+      --  return Byte (SPI1_Periph.DR.DR);
+      return DR_8;
+      --  return Dummy;
    end Transceive;
 
    function Data_Available_UART return Boolean is
@@ -95,28 +99,16 @@ procedure uart_example is
    In_Transfer   : Boolean := False;
    Timeout_Count : Natural := 0;
 
-   type Byte_Array is array (Positive range <>) of Byte;
-   --  Define messages as arrays of Bytes
-   Read_Status    : constant Byte_Array (1 .. 8) := (16#41#, 16#00#, 16#00#, 16#00#,
-                                                      16#00#, 16#00#, 16#00#, 16#00#);
-   Erase_SRAM     : constant Byte_Array (1 .. 2) := (16#05#, 16#00#);
-   ReadID         : constant Byte_Array (1 .. 8) := (16#11#, 16#00#, 16#00#, 16#00#,
-                                                      16#00#, 16#00#, 16#00#, 16#00#);
-   Init_Address   : constant Byte_Array (1 .. 2) := (16#12#, 16#00#);
-   Write_Enable   : constant Byte_Array (1 .. 3) := (16#15#, 16#00#, 16#3B#);
-   Write_Disable  : constant Byte_Array (1 .. 2) := (16#3A#, 16#00#);
-
    -- A helper to avoid code repetition
-   procedure Send_SPI_Message (Data : Byte_Array) is
+   procedure Send_Command (Cmd : Byte) is
       Dummy : Byte;
    begin
       -- CS Low (PA4)
       GPIOA_Periph.BSRR := (BR => (As_Array => True, Arr => (4 => 1, others => 0)),
                             BS => (As_Array => True, Arr => (others => 0)));
       
-      for I in Data'Range loop
-         Dummy := Transceive (Data (I));
-      end loop;
+      Dummy := Transceive (Cmd);
+      Dummy := Transceive (16#00#);
 
       -- Wait for SPI to finish last bit before raising CS
       while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
@@ -124,19 +116,35 @@ procedure uart_example is
       -- CS High (PA4)
       GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
                             BR => (As_Array => True, Arr => (others => 0)));
-   end Send_SPI_Message;
+   end Send_Command;
 
    --  Main loop
 begin
    Initialize_Hardware;
+   delay until Ada.Real_Time.Clock + Milliseconds(100);
+ 
+   -- 1. Read Status (0x41) + 7 dummy bytes to fulfill 64-bit cycle in chart
+   GPIOA_Periph.BSRR := (BR => (As_Array => True, Arr => (4 => 1, others => 0)),
+                         BS => (As_Array => True, Arr => (others => 0)));
+   Trash := Transceive (16#41#);
+   for I in 1 .. 7 loop Trash := Transceive (16#00#); end loop;
+   while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
+   GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
+                         BR => (As_Array => True, Arr => (others => 0)));
+   delay until Ada.Real_Time.Clock + Milliseconds(1);
 
-   Send_SPI_Message (Read_Status);
-   Send_SPI_Message (Erase_SRAM);
-   Send_SPI_Message (ReadID);
-   Send_SPI_Message (Init_Address);
-   Send_SPI_Message (Write_Enable); --  Write Enable & Write Data
-   Send_SPI_Message (Write_Disable);   
-
+   -- 2. Read ID (0x11) + 7 dummy bytes
+   GPIOA_Periph.BSRR := (BR => (As_Array => True, Arr => (4 => 1, others => 0)),
+                         BS => (As_Array => True, Arr => (others => 0)));
+   Trash := Transceive (16#11#);
+   for I in 1 .. 7 loop Trash := Transceive (16#00#); end loop;
+   while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
+   GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
+                         BR => (As_Array => True, Arr => (others => 0)));
+   delay until Ada.Real_Time.Clock + Milliseconds(1);
+   --  3. Write Enable (0x15)
+   Send_Command (16#15#);
+   delay until Ada.Real_Time.Clock + Milliseconds(1);
    loop
       if Data_Available_UART then
          Incoming_Byte := Receive_UART;
@@ -146,6 +154,7 @@ begin
             -- CS Low (PA4)
             GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (others => 0)),
                                   BR => (As_Array => True, Arr => (4 => 1, others => 0)));
+            Trash := Transceive (16#3B#); --  Write Data
             In_Transfer := True;
          end if;
 
@@ -166,6 +175,9 @@ begin
                -- CS High (PA4)
                GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
                                      BR => (As_Array => True, Arr => (others => 0)));
+               
+               Send_Command (16#3A#); --  Write Disable
+               delay until Ada.Real_Time.Clock + Milliseconds(5);
                In_Transfer := False;
                Timeout_Count := 0;
             end if;
