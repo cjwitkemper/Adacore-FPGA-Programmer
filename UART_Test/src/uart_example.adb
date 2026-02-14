@@ -4,7 +4,6 @@ with STM32F0x0.GPIO; use STM32F0x0.GPIO;
 with STM32F0x0.SPI; use STM32F0x0.SPI;
 with STM32F0x0.USART; use STM32F0x0.USART;
 with Ada.Real_Time; use Ada.Real_Time;
-with system;
 
 procedure uart_example is
 
@@ -30,13 +29,16 @@ procedure uart_example is
                                          5 | 6 | 7 => 0, -- AF0 for SPI1
                                          others => 0));
 
-      -- Set  PB3 High and PB4, PB5 Low
+      -- Set  PB3 High and PB2, PB4, PB5 Low
       GPIOB_Periph.BSRR := (BS => (As_Array => True, Arr => (3 => 1, others => 0)),
-                        BR => (As_Array => True, Arr => (4 | 5 => 1, others => 0)));
+                        BR => (As_Array => True, Arr => (2 | 4 | 5 => 1, others => 0)));
 
       --  Set PB3, PB4, and PB5 as General Purpose Output (Value 1)
       GPIOB_Periph.MODER := (As_Array => True,
-                        Arr      => (3 | 4 | 5 => 1, others => 0));
+                        Arr      => (2 | 3 | 4 | 5 => 1,
+                                    1 => 0,
+                                    others => 0));
+
       --  PI1 Configuration (SVD Record)
       --  CR1: Master mode, Baud rate 12MHz, Software Slave Mgmt, Internal Slave Select
       SPI1_Periph.CR1 := (MSTR     => 1,
@@ -114,13 +116,15 @@ procedure uart_example is
    Trash         : Byte;
    In_Transfer   : Boolean := False;
    Timeout_Count : Natural := 0;
+   type Status_Buffer is array (1 .. 7) of Byte;
+   Status_Data : Status_Buffer;
 
    -- A helper to avoid code repetition
    procedure Send_Command (Cmd : Byte) is
       Dummy : Byte;
    begin
       CS_Low;
-      
+
       Dummy := Transceive (Cmd);
       Dummy := Transceive (16#00#);
 
@@ -133,15 +137,35 @@ procedure uart_example is
    --  Main loop
 begin
    Initialize_Hardware;
-   delay until Ada.Real_Time.Clock + Milliseconds(100);
- 
-   --  Read Status (0x41) + 7 dummy bytes to fulfill 64-bit cycle in chart
+   delay until Ada.Real_Time.Clock + Milliseconds (10);
+
+   --  Pulse Reconfig_N
+   GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (others => 0)),
+                        BR => (As_Array => True, Arr => (2 => 1, others => 0)));
+   delay until Ada.Real_Time.Clock + Milliseconds (2);
+   GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (2 => 1, others => 0)),
+                        BR => (As_Array => True, Arr => (others => 0)));
+
+   --  Check if PB1 ready = 1
+   while GPIOB_Periph.IDR.IDR.Arr (1) = 0 loop null; end loop;
+
+   --  Read Status (0x41) + 7 dummy bytes
    CS_Low;
    Trash := Transceive (16#41#);
-   for I in 1 .. 7 loop Trash := Transceive (16#00#); end loop;
+   for I in 1 .. 7 loop Status_Data (I) := Transceive (16#00#); end loop;
    while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
    CS_High;
-   delay until Ada.Real_Time.Clock + Milliseconds(1);
+   delay until Ada.Real_Time.Clock + Milliseconds (1);
+   
+   --  Wait for bit 13 to be 0
+   if (Status_Data (6) and 16#02#) = 1 then
+      --  Erase SRAM
+      Send_Command (16#05#);
+      delay until Ada.Real_Time.Clock + Milliseconds (1);
+   end if;
+
+   --  Check if PB1 ready = 1
+   while GPIOB_Periph.IDR.IDR.Arr (1) = 0 loop null; end loop;
 
    --  Read ID (0x11) + 7 dummy bytes
    CS_Low;
@@ -149,15 +173,15 @@ begin
    for I in 1 .. 7 loop Trash := Transceive (16#00#); end loop;
    while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
    CS_High;
-   delay until Ada.Real_Time.Clock + Milliseconds(1);
+   delay until Ada.Real_Time.Clock + Milliseconds (1);
 
    --  Init Adress
    Send_Command (16#12#);
-   delay until Ada.Real_Time.Clock + Milliseconds(1);
-   
+   delay until Ada.Real_Time.Clock + Milliseconds (1);
+
    --  Write Enable (0x15)
    Send_Command (16#15#);
-   delay until Ada.Real_Time.Clock + Milliseconds(1);
+   delay until Ada.Real_Time.Clock + Milliseconds (1);
 
    loop
       if Data_Available_UART then
@@ -185,11 +209,21 @@ begin
                while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
 
                CS_High;
-               
                Send_Command (16#3A#); --  Write Disable
-               delay until Ada.Real_Time.Clock + Milliseconds(1);
+               delay until Ada.Real_Time.Clock + Milliseconds (1);
                In_Transfer := False;
                Timeout_Count := 0;
+
+               --  Read Status (0x41) + 7 dummy bytes
+               CS_Low;
+               Trash := Transceive (16#41#);
+               for I in 1 .. 7 loop Trash := Transceive (16#00#); end loop;
+               while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
+               CS_High;
+               delay until Ada.Real_Time.Clock + Milliseconds (1);
+               if (Status_Data (6) and 16#02#) = 1 then
+                  --  Go back to beggining TODO
+               end if;
             end if;
          end if;
       end if;
