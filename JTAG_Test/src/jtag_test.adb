@@ -2,6 +2,7 @@ with Interfaces; use Interfaces;
 with STM32F0x0; use STM32F0x0;
 with STM32F0x0.RCC; use STM32F0x0.RCC;
 with STM32F0x0.GPIO; use STM32F0x0.GPIO;
+with Ada.Real_Time; use Ada.Real_Time;
 
 
 procedure jtag_test is
@@ -59,6 +60,7 @@ procedure jtag_test is
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
+      delay until Ada.Real_Time.Clock + Nanoseconds (1); -- 1ns delay for TCK low time
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
