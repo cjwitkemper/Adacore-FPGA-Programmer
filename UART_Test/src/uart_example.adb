@@ -18,26 +18,33 @@ procedure uart_example is
       RCC_Periph.APB1ENR.USART2EN := 1;
 
       --  PA5, PA6, PA7 (SPI) and PA2, PA3 (UART)
-      GPIOA_Periph.MODER := (As_Array => True,
-                             Arr      => (2 | 3 | 5 | 6 | 7 => 2,
-                                          4 => 1,
-                                          others => 0));
+      GPIOA_Periph.MODER.Arr (2) := 2;
+      GPIOA_Periph.MODER.Arr (3) := 2;
+      GPIOA_Periph.MODER.Arr (5) := 2;
+      GPIOA_Periph.MODER.Arr (6) := 2;
+      GPIOA_Periph.MODER.Arr (7) := 2;
+      --  PA4 Output for CS
+      GPIOA_Periph.MODER.Arr (4) := 1;
 
       --  Set Alternate function for PA5, PA6, PA7 (AF0 for SPI1 on F070)
-      GPIOA_Periph.AFRL := (As_Array => True,
-                            Arr      => (2 | 3 => 1, -- AF1 for USART2
-                                         5 | 6 | 7 => 0, -- AF0 for SPI1
-                                         others => 0));
+      GPIOA_Periph.AFRL.Arr (2) := 1; --  AF1 for USART2
+      GPIOA_Periph.AFRL.Arr (3) := 1; --  AF1 for USART2
+      GPIOA_Periph.AFRL.Arr (5) := 0; --  AF0 for SPI1
+      GPIOA_Periph.AFRL.Arr (6) := 0; --  AF0 for SPI1
+      GPIOA_Periph.AFRL.Arr (7) := 0; --  AF0 for SPI1
 
-      -- Set  PB3 High and PB2, PB4, PB5 Low
-      GPIOB_Periph.BSRR := (BS => (As_Array => True, Arr => (3 => 1, others => 0)),
-                        BR => (As_Array => True, Arr => (2 | 4 | 5 => 1, others => 0)));
+      --  Set PB2, PB3, PB4, and PB5 as Output and PB1 as Input
+      GPIOB_Periph.MODER.Arr (1) := 0;
+      GPIOB_Periph.MODER.Arr (2) := 1;
+      GPIOB_Periph.MODER.Arr (3) := 1;
+      GPIOB_Periph.MODER.Arr (4) := 1;
+      GPIOB_Periph.MODER.Arr (5) := 1;
 
-      --  Set PB3, PB4, and PB5 as General Purpose Output (Value 1)
-      GPIOB_Periph.MODER := (As_Array => True,
-                        Arr      => (2 | 3 | 4 | 5 => 1,
-                                    1 => 0,
-                                    others => 0));
+      -- Set  PB2, PB3 High and PB4, PB5 Low
+      GPIOB_Periph.BSRR.BS.Arr (2) := 1;
+      GPIOB_Periph.BSRR.BS.Arr (3) := 1;
+      GPIOB_Periph.BSRR.BR.Arr (4) := 1;
+      GPIOB_Periph.BSRR.BR.Arr (5) := 1;
 
       --  PI1 Configuration (SVD Record)
       --  CR1: Master mode, Baud rate 12MHz, Software Slave Mgmt, Internal Slave Select
@@ -68,8 +75,7 @@ procedure uart_example is
                             others => <>);
 
       --  Initial CS High (PA4)
-      GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
-                            BR => (As_Array => True, Arr => (others => 0)));
+      GPIOA_Periph.BSRR.BS.Arr (4) := 1;
    end Initialize_Hardware;
 
    --  Checks sends and receives
@@ -102,14 +108,12 @@ procedure uart_example is
 
    procedure CS_Low is
    begin
-      GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (others => 0)),
-                            BR => (As_Array => True, Arr => (4 => 1, others => 0)));
+      GPIOA_Periph.BSRR.Br.Arr (4) := 1;
    end CS_Low;
 
    procedure CS_High is
    begin
-      GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (4 => 1, others => 0)),
-                            BR => (As_Array => True, Arr => (others => 0)));
+      GPIOA_Periph.BSRR.BS.Arr (4) := 1;
    end CS_High;
 
    Incoming_Byte : Byte;
@@ -139,12 +143,10 @@ begin
    Initialize_Hardware;
    delay until Ada.Real_Time.Clock + Milliseconds (10);
 
-   --  Pulse Reconfig_N
-   GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (others => 0)),
-                        BR => (As_Array => True, Arr => (2 => 1, others => 0)));
+   --  Pulse Reconfig_N PB2
+   GPIOB_Periph.BSRR.BR.Arr (2) := 1;
    delay until Ada.Real_Time.Clock + Milliseconds (2);
-   GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (2 => 1, others => 0)),
-                        BR => (As_Array => True, Arr => (others => 0)));
+   GPIOB_Periph.BSRR.BS.Arr (2) := 1;
 
    --  Check if PB1 ready = 1
    while GPIOB_Periph.IDR.IDR.Arr (1) = 0 loop null; end loop;
@@ -223,6 +225,7 @@ begin
                delay until Ada.Real_Time.Clock + Milliseconds (1);
                if (Status_Data (6) and 16#02#) = 1 then
                   --  Go back to beggining TODO
+                  null;
                end if;
             end if;
          end if;
