@@ -10,6 +10,7 @@ procedure jtag_test is
    TCK_Pin : constant := 5; -- PA5
    TDO_Pin : constant := 6; -- PA6 (Input)
    TDI_Pin : constant := 7; -- PA7
+   type Bit_Array is array (Natural range <>) of Bit;
 
    Word : Unsigned_32;
 
@@ -64,16 +65,60 @@ procedure jtag_test is
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
-   function Read_TDO return Bit is
+   function Get_TDO return Bit is
    begin
       return GPIOA_Periph.IDR.IDR.Arr (TDO_Pin);
+   end Get_TDO;
+
+   procedure Read_TDO is
+   begin
+      Set_TMS_Pin (1);
+      Pulse_TCK; -- SELECT-DR-SCAN
+      Set_TMS_Pin (0);
+      Pulse_TCK; -- CAPTURE-DR
+      for I in 0 .. 32 loop
+         if(I = 32) then
+            Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+         end if;
+         Pulse_TCK;
+      end loop;
+      Set_TMS_Pin (1);
+      Pulse_TCK; -- UPDATE-DR
+      Set_TMS_Pin (0);
+      Pulse_TCK; -- RUN-TEST/IDLE
+      Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
    end Read_TDO;
+
+   procedure Send_Command (c : Bit_Array) is
+   begin
+      Set_TMS_Pin (1);
+      Pulse_TCK; -- SELECT-DR-SCAN
+      Pulse_TCK; -- SELECT-IR-SCAN
+      Set_TMS_Pin (0);
+      Pulse_TCK; -- CAPTURE-IR
+      Pulse_TCK;
+      for I in 0 .. 7 loop
+         if c (I) = 1 then 
+            Pin_High (TDI_Pin);
+         else
+            Pin_Low (TDI_Pin);
+         end if;
+         if(I = 7) then
+            Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-IR
+         end if;
+         Pulse_TCK;
+         delay 0.0001;
+      end loop;
+      Pulse_TCK; -- UPDATE-IR
+      Set_TMS_Pin (0);
+      Pulse_TCK; -- RUN-TEST/IDLE
+      Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
+
+   end Send_Command;
 
    procedure TDO_Test is
 
-      type Bit_Array is array (Natural range <>) of Bit;
-      IDCODE_Raw : Byte := 16#11#;
-      IDCODE : Bit_Array (0 .. 7) with Address => IDCODE_Raw'Address;
+      cmd : Bit_Array (0 .. 7);
 
       TDO_IDCODE : Bit_Array (0 .. 31);
 
@@ -92,46 +137,55 @@ procedure jtag_test is
       Set_TMS_Pin (0);
       Pulse_TCK;
 
-      --  3. SELECT-DR-SCAN
-      Set_TMS_Pin (1);
-      Pulse_TCK;
+      Read_TDO; -- Read IDCODE (32 bits) from the FPGA's JTAG interface
 
-      --  4. CAPTURE-DR
-      --  The FPGA hardware ID is dumped into the shift register on this state
+      delay 0.001; -- Delay to get to CONFIGURATION state
+      
+      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command to read Status Register (IR=0x41)
+      Send_Command (cmd); -- Send a command to the FPGA (0x41 in this case)
+
       Set_TMS_Pin (0);
-      Pulse_TCK;
-
-      --  5. SHIFT-DR (Reading the 32 bits)
-      Set_TMS_Pin (0);
-      for I in 0 .. 31 loop
-
-            --  On the very last bit, we must pull TMS high to exit the Shift state
-            if I = 31 then
-               Set_TMS_Pin (1);
-            end if;
-
-            --  Falling edge: FPGA places the next bit on the TDO line
-            Pin_Low (TCK_Pin);
-            for D in 1 .. 5 loop null; end loop; --  Setup delay
-
-            --  Sample TDO and pack it into our 32-bit Word (LSB first)
-            if Read_TDO = 1 then
-               Word := Word or Shift_Left (Unsigned_32'(1), I);
-            end if;
-
-            --  Rising edge: FPGA samples our TMS pin and shifts its internal register
-            Pin_High (TCK_Pin);
-            for D in 1 .. 5 loop null; end loop; -- Hold delay
-
+      for I in 1 .. 10 loop
+         Pulse_TCK; -- RUN-TEST/IDLE
       end loop;
+      Read_TDO; -- Read the TDO output after sending the command
 
-      --  6. UPDATE-DR (Moving from Exit1-DR)
-      Set_TMS_Pin (1);
-      Pulse_TCK;
+      cmd := (1, 0, 1, 0, 1, 0, 0, 0); -- Example command (IR=0x15)
+      Send_Command (cmd); -- Send the command
 
-      --  7. RUN-TEST/IDLE
+      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x41)
+      Send_Command (cmd);
+
+      --  Small Delay
       Set_TMS_Pin (0);
-      Pulse_TCK;
+      Pulse_TCK; -- RUN-TEST/IDLE
+      Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
+
+      Read_TDO; -- Read TDO for staus register
+      cmd := (1, 0, 1, 0, 0, 0, 0, 0); -- Example command (IR=0x05)
+      Send_Command (cmd); -- Send the command
+      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x02)
+      Send_Command (cmd);
+      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x41)
+      Send_Command (cmd);
+      Read_TDO; -- Read TDO for staus register
+      cmd := (1, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x09)
+      Send_Command (cmd); -- Send the command
+      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x02)
+      Send_Command (cmd);
+      cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x3A)
+      Send_Command (cmd);
+      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x02)
+      Send_Command (cmd);
+      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x41)
+      Send_Command (cmd);
+      Read_TDO; -- Read TDO for staus register
+      cmd := (1, 0, 1, 0, 1, 0, 0, 0); -- Example command (IR=0x15)
+      Send_Command (cmd); -- Send the command
+      cmd := (0, 1, 0, 0, 1, 0, 0, 0); -- Example command (IR=0x12)
+      Send_Command (cmd);
+      cmd := (1, 1, 1, 0, 1, 0, 0, 0); -- Example command (IR=0x17)
+      Send_Command (cmd);
 
    end TDO_Test;
 
