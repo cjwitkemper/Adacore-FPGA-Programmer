@@ -4,6 +4,7 @@ with STM32F0x0.RCC;  use STM32F0x0.RCC;
 with STM32F0x0.GPIO; use STM32F0x0.GPIO;
 with STM32F0x0.USART; use STM32F0x0.USART;
 with Ada.Real_Time;  use Ada.Real_Time;
+with System.Machine_Code; use System.Machine_Code;
 
 procedure jtag_test is
    TMS_Pin : constant := 4; -- PA4
@@ -11,6 +12,9 @@ procedure jtag_test is
    TDO_Pin : constant := 6; -- PA6 (Input)
    TDI_Pin : constant := 7; -- PA7
    type Bit_Array is array (Natural range <>) of Bit;
+
+   Buffer_Size : constant := 1024;
+   type Buffer_Array is array (0 .. Buffer_Size - 1) of Byte;
 
    --  Setting GPIO
    procedure Initialize_Hardware is
@@ -22,7 +26,8 @@ procedure jtag_test is
       --  Enable USART2
       RCC_Periph.APB1ENR.USART2EN := 1;
 
-      --  PA4, PA5, PA6, PA7
+      --  PA0, PA2, PA3, PA4, PA5, PA6, PA7
+      GPIOA_Periph.MODER.Arr (0) := 2;
       GPIOA_Periph.MODER.Arr (2) := 2;
       GPIOA_Periph.MODER.Arr (3) := 2;
       GPIOA_Periph.MODER.Arr (4) := 1;
@@ -31,6 +36,7 @@ procedure jtag_test is
       GPIOA_Periph.MODER.Arr (7) := 1;
 
       --  Set Alternate function for PA2, PA3 (AF1 for USART2)
+      GPIOA_Periph.AFRL.Arr (0) := 1; --  AF1 for USART2
       GPIOA_Periph.AFRL.Arr (2) := 1; --  AF1 for USART2
       GPIOA_Periph.AFRL.Arr (3) := 1; --  AF1 for USART2
 
@@ -39,6 +45,8 @@ procedure jtag_test is
       GPIOA_Periph.BSRR.BR.Arr (5) := 1;
       GPIOA_Periph.BSRR.BR.Arr (6) := 1;
       GPIOA_Periph.BSRR.BR.Arr (7) := 1;
+
+      USART2_Periph.CR3.CTSE := 1;
 
       --  USART2 Configuration (115200 Baud @ 48MHz)
       USART2_Periph.BRR := (DIV_Mantissa => 16#1A#,
@@ -49,7 +57,7 @@ procedure jtag_test is
       USART2_Periph.CR1 := (UE     => 1,
                             TE     => 1,
                             RE     => 1,
-                            RXNEIE => 1,
+                            RXNEIE => 0,
                             OVER8  => 0,
                             others => <>);
    end Initialize_Hardware;
@@ -81,8 +89,9 @@ procedure jtag_test is
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
-      delay until
-        Ada.Real_Time.Clock + Microseconds (1); -- 1us delay for TCK low time
+      --  delay until Ada.Real_Time.Clock + Microseconds (1);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
@@ -229,6 +238,11 @@ procedure jtag_test is
       Send_Command (cmd);
       cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x02)
       Send_Command (cmd);
+
+      --  cmd := (0, 0, 1, 1, 1, 1, 0, 0); -- Example command (IR=0x3C)
+      --  Send_Command (cmd);
+      --  delay 0.015;
+
       cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x41)
       Send_Command (cmd);
       Read_TDO; -- Read TDO for staus register
@@ -246,12 +260,56 @@ procedure jtag_test is
       Pulse_TCK; -- Shift-DR
    end TDO_Test;
 
+
+   cmd : Bit_Array (0 .. 7);
+   procedure Exit_To_Run is
+   begin
+      Pulse_TCK; -- UPDATE-DR
+      Set_TMS_Pin (0);
+      Pulse_TCK; -- RUN-TEST/IDLE
+      cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- Example command to read Status Register (IR=0x3A) 0A?
+      Send_Command (cmd);
+      cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
+      Send_Command (cmd);
+
+      --  Read SRAM
+      cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x15) 3A?
+      Send_Command (cmd);
+      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x12) 02?
+      Send_Command (cmd);
+      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x03) 41?
+      Send_Command (cmd);
+      Read_TDO;
+
+      --  Set_TMS_Pin (1); -- SELECT-DR-SCAN
+      --  Pulse_TCK;
+      --  Set_TMS_Pin (0); -- CAPTURE-DR
+      --  Pulse_TCK;
+      --  Pulse_TCK; -- Shift-DR
+      --  for I in 1 .. 712 loop
+      --     for J in 1 .. 2836 loop
+      --        if(I = 712 and J = 2836) then
+      --           Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+      --        end if;
+      --        Pulse_TCK;
+      --     end loop;
+      --  end loop;
+      --  Pulse_TCK; -- UPDATE-DR
+      --  Set_TMS_Pin (0);
+      --  Pulse_TCK; -- RUN-TEST/IDLE
+      --  cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x3A) Nothing?
+      --  Send_Command (cmd);
+      --  cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x02) Nothing?
+      --  Send_Command (cmd);
+
+
+   end Exit_To_Run;
+
    First_Byte : Byte := 16#00#;
    Second_Byte : Byte := 16#00#;
    Byte_Count : Natural := 0;
    In_Transfer : Boolean := False;
    Timeout_Count : Natural := 0;
-   Current_Byte : Byte;
 begin
    Initialize_Hardware;
 
@@ -282,6 +340,7 @@ begin
                Byte_Count := 0;
                Transceive_Byte_JTAG (Second_Byte, True);
                --  Pulse_TCK;
+               Exit_To_Run;
             end if;
          end if;
       end if;
