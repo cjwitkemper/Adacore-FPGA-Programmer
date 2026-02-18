@@ -12,8 +12,6 @@ procedure jtag_test is
    TDI_Pin : constant := 7; -- PA7
    type Bit_Array is array (Natural range <>) of Bit;
 
-   Word : Unsigned_32;
-
    --  Setting GPIO
    procedure Initialize_Hardware is
    begin
@@ -25,10 +23,16 @@ procedure jtag_test is
       RCC_Periph.APB1ENR.USART2EN := 1;
 
       --  PA4, PA5, PA6, PA7
+      GPIOA_Periph.MODER.Arr (2) := 2;
+      GPIOA_Periph.MODER.Arr (3) := 2;
       GPIOA_Periph.MODER.Arr (4) := 1;
       GPIOA_Periph.MODER.Arr (5) := 1;
       GPIOA_Periph.MODER.Arr (6) := 0;
       GPIOA_Periph.MODER.Arr (7) := 1;
+
+      --  Set Alternate function for PA2, PA3 (AF1 for USART2)
+      GPIOA_Periph.AFRL.Arr (2) := 1; --  AF1 for USART2
+      GPIOA_Periph.AFRL.Arr (3) := 1; --  AF1 for USART2
 
       --  Initial CS Low(PA4) and TCK, TMS, TDI Low
       GPIOA_Periph.BSRR.BR.Arr (4) := 1;
@@ -37,7 +41,7 @@ procedure jtag_test is
       GPIOA_Periph.BSRR.BR.Arr (7) := 1;
 
       --  USART2 Configuration (115200 Baud @ 48MHz)
-      USART2_Periph.BRR := (DIV_Mantissa => 16#416#,
+      USART2_Periph.BRR := (DIV_Mantissa => 16#1A#,
                             DIV_Fraction => 0,
                             others       => <>);
 
@@ -45,9 +49,9 @@ procedure jtag_test is
       USART2_Periph.CR1 := (UE     => 1,
                             TE     => 1,
                             RE     => 1,
+                            RXNEIE => 1,
                             OVER8  => 0,
                             others => <>);
-
    end Initialize_Hardware;
 
    -- Helper procedures to drive GPIO pins (PAx) using BSRR
@@ -78,7 +82,7 @@ procedure jtag_test is
    begin
       Pin_Low (TCK_Pin);
       delay until
-        Ada.Real_Time.Clock + Nanoseconds (1); -- 1ns delay for TCK low time
+        Ada.Real_Time.Clock + Microseconds (1); -- 1us delay for TCK low time
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
@@ -96,7 +100,6 @@ procedure jtag_test is
       for I in 0 .. 32 loop
          if (I = 32) then
             Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
-
          end if;
          Pulse_TCK;
       end loop;
@@ -139,8 +142,10 @@ procedure jtag_test is
       TDO_Byte : Byte := 0;
    begin
       for Bit in 0 .. 7 loop
-         if Last_Byte and then (Bit = 7) then
-            Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+         if Last_Byte then
+            if (Bit = 7) then
+               Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+            end if;
          end if;
 
          if (Data_Out and Shift_Left (1, Bit)) /= 0 then
@@ -241,17 +246,21 @@ procedure jtag_test is
       Pulse_TCK; -- Shift-DR
    end TDO_Test;
 
-   First_Byte : Byte;
-   Second_Byte : Byte;
+   First_Byte : Byte := 16#00#;
+   Second_Byte : Byte := 16#00#;
    Byte_Count : Natural := 0;
    In_Transfer : Boolean := False;
    Timeout_Count : Natural := 0;
+   Current_Byte : Byte;
 begin
    Initialize_Hardware;
 
    TDO_Test;
 
    loop
+      if USART2_Periph.ISR.ORE /= 0 then
+      USART2_Periph.ICR.ORECF := 1; -- Clear the Overrun flag
+      end if;
       if Data_Available_UART then
          First_Byte := Second_Byte;
          Second_Byte := Receive_UART;
@@ -269,8 +278,10 @@ begin
             Timeout_Count := Timeout_Count + 1;
             if Timeout_Count > 50_000 then
                In_Transfer := False;
+               Timeout_Count := 0;
                Byte_Count := 0;
                Transceive_Byte_JTAG (Second_Byte, True);
+               --  Pulse_TCK;
             end if;
          end if;
       end if;
