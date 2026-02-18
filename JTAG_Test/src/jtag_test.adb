@@ -1,9 +1,8 @@
-with Interfaces; use Interfaces;
-with STM32F0x0; use STM32F0x0;
-with STM32F0x0.RCC; use STM32F0x0.RCC;
+with Interfaces;     use Interfaces;
+with STM32F0x0;      use STM32F0x0;
+with STM32F0x0.RCC;  use STM32F0x0.RCC;
 with STM32F0x0.GPIO; use STM32F0x0.GPIO;
-with Ada.Real_Time; use Ada.Real_Time;
-
+with Ada.Real_Time;  use Ada.Real_Time;
 
 procedure jtag_test is
    TMS_Pin : constant := 4; -- PA4
@@ -22,15 +21,18 @@ procedure jtag_test is
       RCC_Periph.AHBENR.IOPAEN := 1;
 
       --  PA4, PA5, PA6, PA7
-      GPIOA_Periph.MODER := (As_Array => True,
-                             Arr      => (6 => 0, -- PA6 as Input
-                                          4 | 5 | 7 => 1,
-                                          others => 0));
+      GPIOA_Periph.MODER :=
+        (As_Array => True,
+         Arr      =>
+           (6         => 0,
+            -- PA6 as Input
+            4 | 5 | 7 => 1,
+            others    => 0));
 
       --  Initial CS Low(PA4) and TCK, TMS, TDI Low
-      GPIOA_Periph.BSRR := (BS => (As_Array => True, Arr => (others => 0)),
-                            BR => (As_Array => True, Arr => (4 | 5 | 6 | 7 => 1,
-                                                            others => 0)));
+      GPIOA_Periph.BSRR :=
+        (BS => (As_Array => True, Arr => (others => 0)),
+         BR => (As_Array => True, Arr => (4 | 5 | 6 | 7 => 1, others => 0)));
 
    end Initialize_Hardware;
 
@@ -61,7 +63,8 @@ procedure jtag_test is
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
-      delay until Ada.Real_Time.Clock + Nanoseconds (1); -- 1ns delay for TCK low time
+      delay until
+        Ada.Real_Time.Clock + Nanoseconds (1); -- 1ns delay for TCK low time
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
@@ -77,8 +80,9 @@ procedure jtag_test is
       Set_TMS_Pin (0);
       Pulse_TCK; -- CAPTURE-DR
       for I in 0 .. 32 loop
-         if(I = 32) then
+         if (I = 32) then
             Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+
          end if;
          Pulse_TCK;
       end loop;
@@ -98,13 +102,14 @@ procedure jtag_test is
       Pulse_TCK; -- CAPTURE-IR
       Pulse_TCK;
       for I in 0 .. 7 loop
-         if c (I) = 1 then 
+         if c (I) = 1 then
             Pin_High (TDI_Pin);
          else
             Pin_Low (TDI_Pin);
          end if;
-         if(I = 7) then
+         if (I = 7) then
             Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-IR
+
          end if;
          Pulse_TCK;
          delay 0.0001;
@@ -116,17 +121,35 @@ procedure jtag_test is
 
    end Send_Command;
 
+   procedure Transceive_Byte_JTAG (Data_Out : Byte) is
+      TDO_Byte : Byte := 0;
+   begin
+      for Bit in 0 .. 7 loop
+         if(Bit = 7) then
+            Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+
+         end if;
+         if (Data_Out and Shift_Left (1, Bit)) /= 0 then
+            Pin_High (TDI_Pin);
+         else
+            Pin_Low (TDI_Pin);
+         end if;
+
+         Pulse_TCK;
+      end loop;
+   end Transceive_Byte_JTAG;
+
    procedure TDO_Test is
 
       cmd : Bit_Array (0 .. 7);
 
       TDO_IDCODE : Bit_Array (0 .. 31);
 
-      begin
+   begin
       --  Reset the TAP
       Set_TMS_Pin (1);
       for I in 1 .. 6 loop
-            Pulse_TCK;
+         Pulse_TCK;
       end loop;
 
       --  Go to Idle
@@ -140,7 +163,7 @@ procedure jtag_test is
       Read_TDO; -- Read IDCODE (32 bits) from the FPGA's JTAG interface
 
       delay 0.001; -- Delay to get to CONFIGURATION state
-      
+
       cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command to read Status Register (IR=0x41)
       Send_Command (cmd); -- Send a command to the FPGA (0x41 in this case)
 
@@ -186,6 +209,14 @@ procedure jtag_test is
       Send_Command (cmd);
       cmd := (1, 1, 1, 0, 1, 0, 0, 0); -- Example command (IR=0x17)
       Send_Command (cmd);
+
+      Set_TMS_Pin (1);
+      Pulse_TCK; -- SELECT-DR-SCAN
+      Set_TMS_Pin (0);
+      Pulse_TCK; -- CAPTURE-DR
+      Pulse_TCK; -- Shift-DR
+
+      Transceive_Byte_JTAG (16#AB#); -- Send a byte and read the response
 
    end TDO_Test;
 
