@@ -73,14 +73,6 @@ procedure jtag_test is
       GPIOA_Periph.BSRR.BR.Arr (Pin) := 1;
    end Pin_Low;
 
-   procedure Set_TMS_Pin (B : Bit) is
-   begin
-      if B = 1 then
-         Pin_High (TMS_Pin);
-      else
-         Pin_Low (TMS_Pin);
-      end if;
-   end Set_TMS_Pin;
 
    procedure Pulse_TCK is
    begin
@@ -97,29 +89,29 @@ procedure jtag_test is
 
    procedure Read_TDO is
    begin
-      Set_TMS_Pin (1);
+      Pin_High (TMS_PIN);
       Pulse_TCK; -- SELECT-DR-SCAN
-      Set_TMS_Pin (0);
+      Pin_Low (TMS_PIN);
       Pulse_TCK; -- CAPTURE-DR
       for I in 0 .. 32 loop
          if (I = 32) then
-            Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
+            Pin_High (TMS_PIN); -- Pull TMS high on the last bit to exit Shift-DR
          end if;
          Pulse_TCK;
       end loop;
-      Set_TMS_Pin (1);
+      Pin_High (TMS_PIN);
       Pulse_TCK; -- UPDATE-DR
-      Set_TMS_Pin (0);
+      Pin_Low (TMS_PIN);
       Pulse_TCK; -- RUN-TEST/IDLE
       Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
    end Read_TDO;
 
    procedure Send_Command (c : Bit_Array) is
    begin
-      Set_TMS_Pin (1);
+      Pin_High (TMS_PIN);
       Pulse_TCK; -- SELECT-DR-SCAN
       Pulse_TCK; -- SELECT-IR-SCAN
-      Set_TMS_Pin (0);
+      Pin_Low (TMS_PIN);
       Pulse_TCK; -- CAPTURE-IR
       Pulse_TCK;
       for I in 0 .. 7 loop
@@ -129,14 +121,14 @@ procedure jtag_test is
             Pin_Low (TDI_Pin);
          end if;
          if (I = 7) then
-            Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-IR
+            Pin_High (TMS_PIN); -- Pull TMS high on the last bit to exit Shift-IR
 
          end if;
          Pulse_TCK;
          delay 0.0001;
       end loop;
       Pulse_TCK; -- UPDATE-IR
-      Set_TMS_Pin (0);
+      Pin_Low (TMS_PIN);
       Pulse_TCK; -- RUN-TEST/IDLE
       Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
 
@@ -184,35 +176,48 @@ procedure jtag_test is
       return Byte (USART2_Periph.RDR.RDR);
    end Receive_UART;
 
-   procedure TDO_Test is
 
-      cmd : Bit_Array (0 .. 7);
-
-      TDO_IDCODE : Bit_Array (0 .. 31);
-
+   --  MAIN FUNCTIONS : CALLED BY UART COMMANDS
+   procedure Reset_TAP is
    begin
-      --  Reset the TAP
-      Set_TMS_Pin (1);
+      Pin_High (TMS_PIN);
       for I in 1 .. 6 loop
          Pulse_TCK;
       end loop;
+   end Reset_TAP;
 
-      --  Go to Idle
-      Set_TMS_Pin (0);
-      Pulse_TCK;
+   function Read_IDCODE return Bit_Array is
+      IDCODE : Bit_Array (0 .. 31);
+   begin
+      Pin_High (TMS_PIN);
+      Pulse_TCK; -- SELECT-DR-SCAN
+      Pin_Low (TMS_PIN);
+      Pulse_TCK; -- CAPTURE-DR
+      for I in 0 .. 31 loop
+         if (I = 31) then
+            Pin_High (TMS_PIN); -- Pull TMS high on the last bit to exit
+         end if;
+         IDCODE (I) := Get_TDO;
+         Pulse_TCK;
+      end loop;
+      Pin_High (TMS_PIN);
+      Pulse_TCK; -- UPDATE-DR
+      Pin_Low (TMS_PIN);
+      Pulse_TCK; -- RUN-TEST/IDLE
+      Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
+      return IDCODE;
+   end Read_IDCODE;
 
-      --  2. RUN-TEST/IDLE
-      Set_TMS_Pin (0);
-      Pulse_TCK;
-
-      Read_TDO; -- Read IDCODE (32 bits) from the FPGA's JTAG interface
-
+   procedure Init_Configuration is
+      cmd : Bit_Array (0 .. 7);
+   begin
+      
       delay 0.001; -- Delay to get to CONFIGURATION state
 
       cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command to read Status Register (IR=0x41)
       Send_Command (cmd); -- Send a command to the FPGA (0x41 in this case)
 
-      Set_TMS_Pin (0);
+      Pin_Low (TMS_PIN);
       for I in 1 .. 10 loop
          Pulse_TCK; -- RUN-TEST/IDLE
       end loop;
@@ -225,7 +230,7 @@ procedure jtag_test is
       Send_Command (cmd);
 
       --  Small Delay
-      Set_TMS_Pin (0);
+      Pin_Low (TMS_PIN);
       Pulse_TCK; -- RUN-TEST/IDLE
       Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
 
@@ -259,75 +264,22 @@ procedure jtag_test is
       Send_Command (cmd);
       cmd := (1, 1, 1, 0, 1, 0, 0, 0); -- Example command (IR=0x17)
       Send_Command (cmd);
-
-      Set_TMS_Pin (1);
-      Pulse_TCK; -- SELECT-DR-SCAN
-      Set_TMS_Pin (0);
-      Pulse_TCK; -- CAPTURE-DR
-      Pulse_TCK; -- Shift-DR
-   end TDO_Test;
-
-
-   cmd : Bit_Array (0 .. 7);
-   procedure Exit_To_Run is
-   begin
-      Pulse_TCK; -- UPDATE-DR
-      Set_TMS_Pin (0);
-      Pulse_TCK; -- RUN-TEST/IDLE
-      cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- Example command to read Status Register (IR=0x3A) 0A?
-      Send_Command (cmd);
-
-      Read_TDO;
-      
-      cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
-      Send_Command (cmd);
-
-      --  Something here?
-
-      --  Read SRAM
-      cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x15) 3A?
-      Send_Command (cmd);
-      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x12) 02?
-      Send_Command (cmd);
-      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x03) 41?
-      Send_Command (cmd);
-      Read_TDO;
-
-      --  Set_TMS_Pin (1); -- SELECT-DR-SCAN
-      --  Pulse_TCK;
-      --  Set_TMS_Pin (0); -- CAPTURE-DR
-      --  Pulse_TCK;
-      --  Pulse_TCK; -- Shift-DR
-      --  for I in 1 .. 712 loop
-      --     for J in 1 .. 2836 loop
-      --        if(I = 712 and J = 2836) then
-      --           Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
-      --        end if;
-      --        Pulse_TCK;
-      --     end loop;
-      --  end loop;
-      --  Pulse_TCK; -- UPDATE-DR
-      --  Set_TMS_Pin (0);
-      --  Pulse_TCK; -- RUN-TEST/IDLE
-      --  cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x3A) Nothing?
-      --  Send_Command (cmd);
-      --  cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x02) Nothing?
-      --  Send_Command (cmd);
-
-
-   end Exit_To_Run;
+   end Init_Configuration;
 
    First_Byte : Byte := 16#00#;
    Second_Byte : Byte := 16#00#;
    Byte_Count : Natural := 0;
    In_Transfer : Boolean := False;
    Timeout_Count : Natural := 0;
-begin
-   Initialize_Hardware;
-
-   TDO_Test;
-
-   loop
+   procedure Send_Configuration_Bitstream is
+      cmd : Bit_Array (0 .. 7);
+   begin
+      Pin_High (TMS_PIN);
+      Pulse_TCK; -- SELECT-DR-SCAN
+      Pin_Low (TMS_PIN);
+      Pulse_TCK; -- CAPTURE-DR
+      Pulse_TCK; -- Shift-DR
+      loop
       if USART2_Periph.ISR.ORE /= 0 then
       USART2_Periph.ICR.ORECF := 1; -- Clear the Overrun flag
       end if;
@@ -352,10 +304,38 @@ begin
                Byte_Count := 0;
                Transceive_Last_Byte_JTAG (Second_Byte);
                --  Pulse_TCK;
-               Exit_To_Run;
+               Pulse_TCK; -- UPDATE-DR
+      Pin_Low (TMS_PIN);
+      Pulse_TCK; -- RUN-TEST/IDLE
+      cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- Example command to read Status Register (IR=0x3A) 0A?
+      Send_Command (cmd);
+
+      Read_TDO;
+      
+      cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
+      Send_Command (cmd);
+
+      --  Something here?
+
+      --  Read SRAM
+      cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x15) 3A?
+      Send_Command (cmd);
+      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x12) 02?
+      Send_Command (cmd);
+      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x03) 41?
+      Send_Command (cmd);
+      Read_TDO;
             end if;
          end if;
       end if;
 
    end loop;
+   end Send_Configuration_Bitstream;
+
+begin
+   --  TODO: Add UART command handling to trigger different JTAG operations (e.g., read IDCODE, send configuration bitstream, etc.)
+   Initialize_Hardware;
+   Reset_TAP;
+   Init_Configuration;
+   Send_Configuration_Bitstream;
 end jtag_test;
