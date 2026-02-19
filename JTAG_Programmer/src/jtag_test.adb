@@ -65,16 +65,12 @@ procedure jtag_test is
    -- Helper procedures to drive GPIO pins (PAx) using BSRR
    procedure Pin_High (Pin : Natural) is
    begin
-      if Pin <= 15 then
-         GPIOA_Periph.BSRR.BS.Arr (Pin) := 1;
-      end if;
+      GPIOA_Periph.BSRR.BS.Arr (Pin) := 1;
    end Pin_High;
 
    procedure Pin_Low (Pin : Natural) is
    begin
-      if Pin <= 15 then
-         GPIOA_Periph.BSRR.BR.Arr (Pin) := 1;
-      end if;
+      GPIOA_Periph.BSRR.BR.Arr (Pin) := 1;
    end Pin_Low;
 
    procedure Set_TMS_Pin (B : Bit) is
@@ -84,22 +80,11 @@ procedure jtag_test is
       else
          Pin_Low (TMS_Pin);
       end if;
-      --  Asm ("nop", Volatile => True);
-      --  Asm ("nop", Volatile => True);
    end Set_TMS_Pin;
 
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
-      --  delay until Ada.Real_Time.Clock + Microseconds (1);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
       Asm ("nop", Volatile => True);
       Asm ("nop", Volatile => True);
       Pin_High (TCK_Pin);
@@ -157,14 +142,26 @@ procedure jtag_test is
 
    end Send_Command;
 
-   procedure Transceive_Byte_JTAG (Data_Out : Byte; Last_Byte : Boolean) is
+   procedure Transceive_Byte_JTAG (Data_Out : Byte) is
       TDO_Byte : Byte := 0;
    begin
       for Bit in reverse 0 .. 7 loop
-         if Last_Byte then
-            if (Bit = 0) then
-               Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
-            end if;
+         if (Data_Out and Shift_Left (1, Bit)) /= 0 then
+            Pin_High (TDI_Pin);
+         else
+            Pin_Low (TDI_Pin);
+         end if;
+
+         Pulse_TCK;
+      end loop;
+   end Transceive_Byte_JTAG;
+
+   procedure Transceive_Last_Byte_JTAG (Data_Out : Byte) is
+      TDO_Byte : Byte := 0;
+   begin
+      for Bit in reverse 0 .. 7 loop
+         if (Bit = 0) then
+            Pin_High (TMS_Pin); -- Pull TMS high on the last bit to exit Shift-DR
          end if;
 
          if (Data_Out and Shift_Left (1, Bit)) /= 0 then
@@ -175,7 +172,7 @@ procedure jtag_test is
 
          Pulse_TCK;
       end loop;
-   end Transceive_Byte_JTAG;
+   end Transceive_Last_Byte_JTAG;
 
    function Data_Available_UART return Boolean is
    begin
@@ -282,6 +279,8 @@ procedure jtag_test is
       cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
       Send_Command (cmd);
 
+      --  Something here?
+
       --  Read SRAM
       cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x15) 3A?
       Send_Command (cmd);
@@ -338,7 +337,7 @@ begin
          end if;
 
          if Byte_Count > 1 then
-            Transceive_Byte_JTAG (First_Byte, False);
+            Transceive_Byte_JTAG (First_Byte);
          end if;
          Timeout_Count := 0;
       else
@@ -348,7 +347,7 @@ begin
                In_Transfer := False;
                Timeout_Count := 0;
                Byte_Count := 0;
-               Transceive_Byte_JTAG (Second_Byte, True);
+               Transceive_Last_Byte_JTAG (Second_Byte);
                --  Pulse_TCK;
                Exit_To_Run;
             end if;
