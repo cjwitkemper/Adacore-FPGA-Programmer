@@ -49,7 +49,7 @@ procedure jtag_test is
       USART2_Periph.CR3.CTSE := 1;
 
       --  USART2 Configuration (115200 Baud @ 48MHz)
-      USART2_Periph.BRR := (DIV_Mantissa => 16#1A#,
+      USART2_Periph.BRR := (DIV_Mantissa => 16#0D#,
                             DIV_Fraction => 0,
                             others       => <>);
 

@@ -9,7 +9,7 @@ openocd -f interface/stlink.cfg -f target/stm32f0x.cfg -c "program bin/jtag_test
 
 To send a file through terminal  
 ls /dev/ttyACM*  
-sudo stty -F /dev/ttyACM0 115200 raw -echo  
+sudo stty -F /dev/ttyACM0 230404 raw -echo  
 sudo cat output1.bin > /dev/ttyACM0  
 
 To update a bin file with bits  
