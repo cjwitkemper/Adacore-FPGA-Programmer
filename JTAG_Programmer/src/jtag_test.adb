@@ -276,6 +276,9 @@ procedure jtag_test is
       Pulse_TCK; -- RUN-TEST/IDLE
       cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- Example command to read Status Register (IR=0x3A) 0A?
       Send_Command (cmd);
+
+      Read_TDO;
+      
       cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
       Send_Command (cmd);
 
