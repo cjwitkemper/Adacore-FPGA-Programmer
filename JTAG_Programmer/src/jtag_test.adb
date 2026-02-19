@@ -84,12 +84,22 @@ procedure jtag_test is
       else
          Pin_Low (TMS_Pin);
       end if;
+      --  Asm ("nop", Volatile => True);
+      --  Asm ("nop", Volatile => True);
    end Set_TMS_Pin;
 
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
       --  delay until Ada.Real_Time.Clock + Microseconds (1);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
+      Asm ("nop", Volatile => True);
       Asm ("nop", Volatile => True);
       Asm ("nop", Volatile => True);
       Pin_High (TCK_Pin);
@@ -150,9 +160,9 @@ procedure jtag_test is
    procedure Transceive_Byte_JTAG (Data_Out : Byte; Last_Byte : Boolean) is
       TDO_Byte : Byte := 0;
    begin
-      for Bit in 0 .. 7 loop
+      for Bit in reverse 0 .. 7 loop
          if Last_Byte then
-            if (Bit = 7) then
+            if (Bit = 0) then
                Set_TMS_Pin (1); -- Pull TMS high on the last bit to exit Shift-DR
             end if;
          end if;
