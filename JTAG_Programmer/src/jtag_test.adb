@@ -34,7 +34,7 @@ procedure jtag_test is
 
       --  CR1: Master mode, Baud rate 12MHz, Software Slave Mgmt, Internal Slave Select
       SPI1_Periph.CR1 := (MSTR     => 1,
-                          BR       => 3,
+                          BR       => 1,
                           CPOL     => 1,
                           CPHA     => 1,
                           LSBFIRST => 0,
@@ -105,9 +105,9 @@ procedure jtag_test is
 
       USART2_Periph.CR3.CTSE := 1;
 
-      --  USART2 Configuration (921600 Baud @ 48MHz)
-      USART2_Periph.BRR := (DIV_Mantissa => 16#03#,
-                            DIV_Fraction => 16#04#,
+      --  USART2 Configuration (2,000,000 Baud @ 48MHz)
+      USART2_Periph.BRR := (DIV_Mantissa => 16#01#,
+                            DIV_Fraction => 16#08#,
                             others       => <>);
 
       --  Enable UART, Transmit, and Receive
