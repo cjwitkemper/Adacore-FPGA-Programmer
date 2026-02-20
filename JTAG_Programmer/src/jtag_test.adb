@@ -2,6 +2,7 @@ with Interfaces;     use Interfaces;
 with STM32F0x0;      use STM32F0x0;
 with STM32F0x0.RCC;  use STM32F0x0.RCC;
 with STM32F0x0.GPIO; use STM32F0x0.GPIO;
+with STM32F0x0.SPI; use STM32F0x0.SPI;
 with STM32F0x0.USART; use STM32F0x0.USART;
 with Ada.Real_Time;  use Ada.Real_Time;
 with System.Machine_Code; use System.Machine_Code;
@@ -15,6 +16,62 @@ procedure jtag_test is
 
    Buffer_Size : constant := 1024;
    type Buffer_Array is array (0 .. Buffer_Size - 1) of Byte;
+
+   -- Helper procedures to drive GPIO pins (PAx) using BSRR
+   procedure Pin_High (Pin : Natural) is
+   begin
+      GPIOA_Periph.BSRR.BS.Arr (Pin) := 1;
+   end Pin_High;
+
+   procedure Pin_Low (Pin : Natural) is
+   begin
+      GPIOA_Periph.BSRR.BR.Arr (Pin) := 1;
+   end Pin_Low;
+
+   procedure SPI_Enable is
+   begin
+      RCC_Periph.APB2ENR.SPI1EN := 1;
+
+      --  CR1: Master mode, Baud rate 12MHz, Software Slave Mgmt, Internal Slave Select
+      SPI1_Periph.CR1 := (MSTR     => 1,
+                          BR       => 3,
+                          CPOL     => 1,
+                          CPHA     => 1,
+                          LSBFIRST => 0,
+                          SSM      => 1,
+                          SSI      => 1,
+                          SPE      => 1,
+                          others   => <>);
+
+      --  CR2: 8-bit Data Size (7 is 8-bit), FRXTH must be 1 for 8-bit/Byte access
+      SPI1_Periph.CR2 := (DS       => 7,
+                          FRXTH    => 1,
+                          others   => <>);
+
+      GPIOA_Periph.AFRL.Arr (5) := 0; --  AF0 for SPI1
+      GPIOA_Periph.AFRL.Arr (6) := 0; --  AF0 for SPI1
+      GPIOA_Periph.AFRL.Arr (7) := 0; --  AF0 for SPI1
+
+      GPIOA_Periph.MODER.Arr (5) := 2;
+      GPIOA_Periph.MODER.Arr (6) := 2;
+      GPIOA_Periph.MODER.Arr (7) := 2;
+
+
+   end SPI_Enable;
+
+   procedure SPI_Disable is
+   begin
+      while SPI1_Periph.SR.BSY /= 0 loop null; end loop;
+
+      Pin_High (TCK_Pin);
+      Pin_HIGH (TDI_Pin);
+      Pin_Low (TMS_Pin);
+
+      GPIOA_Periph.MODER.Arr (5) := 1;
+      GPIOA_Periph.MODER.Arr (6) := 0;
+      GPIOA_Periph.MODER.Arr (7) := 1;
+      RCC_Periph.APB2ENR.SPI1EN := 0;
+   end SPI_Disable;
 
    --  Setting GPIO
    procedure Initialize_Hardware is
@@ -42,15 +99,15 @@ procedure jtag_test is
 
       --  Initial CS Low(PA4) and TCK, TMS, TDI Low
       GPIOA_Periph.BSRR.BR.Arr (4) := 1;
-      GPIOA_Periph.BSRR.BR.Arr (5) := 1;
+      GPIOA_Periph.BSRR.BS.Arr (5) := 1;
       GPIOA_Periph.BSRR.BR.Arr (6) := 1;
       GPIOA_Periph.BSRR.BR.Arr (7) := 1;
 
       USART2_Periph.CR3.CTSE := 1;
 
-      --  USART2 Configuration (115200 Baud @ 48MHz)
-      USART2_Periph.BRR := (DIV_Mantissa => 16#0D#,
-                            DIV_Fraction => 0,
+      --  USART2 Configuration (921600 Baud @ 48MHz)
+      USART2_Periph.BRR := (DIV_Mantissa => 16#03#,
+                            DIV_Fraction => 16#04#,
                             others       => <>);
 
       --  Enable UART, Transmit, and Receive
@@ -61,18 +118,6 @@ procedure jtag_test is
                             OVER8  => 0,
                             others => <>);
    end Initialize_Hardware;
-
-   -- Helper procedures to drive GPIO pins (PAx) using BSRR
-   procedure Pin_High (Pin : Natural) is
-   begin
-      GPIOA_Periph.BSRR.BS.Arr (Pin) := 1;
-   end Pin_High;
-
-   procedure Pin_Low (Pin : Natural) is
-   begin
-      GPIOA_Periph.BSRR.BR.Arr (Pin) := 1;
-   end Pin_Low;
-
 
    procedure Pulse_TCK is
    begin
@@ -134,18 +179,12 @@ procedure jtag_test is
 
    end Send_Command;
 
-   procedure Transceive_Byte_JTAG (Data_Out : Byte) is
-      TDO_Byte : Byte := 0;
+   function Transceive_Byte_JTAG (Data_Out : Byte) return Byte is
+      DR_Byte : Byte with Address => SPI1_Periph.DR'Address;
    begin
-      for Bit in reverse 0 .. 7 loop
-         if (Data_Out and Shift_Left (1, Bit)) /= 0 then
-            Pin_High (TDI_Pin);
-         else
-            Pin_Low (TDI_Pin);
-         end if;
-
-         Pulse_TCK;
-      end loop;
+      while SPI1_Periph.SR.TXE = 0 loop null; end loop;
+      DR_Byte := Data_Out;
+      return DR_Byte;
    end Transceive_Byte_JTAG;
 
    procedure Transceive_Last_Byte_JTAG (Data_Out : Byte) is
@@ -268,6 +307,7 @@ procedure jtag_test is
 
    First_Byte : Byte := 16#00#;
    Second_Byte : Byte := 16#00#;
+   Trash : Byte;
    Byte_Count : Natural := 0;
    In_Transfer : Boolean := False;
    Timeout_Count : Natural := 0;
@@ -280,56 +320,55 @@ procedure jtag_test is
       Pulse_TCK; -- CAPTURE-DR
       Pulse_TCK; -- Shift-DR
       loop
-      if USART2_Periph.ISR.ORE /= 0 then
-      USART2_Periph.ICR.ORECF := 1; -- Clear the Overrun flag
-      end if;
-      if Data_Available_UART then
-         First_Byte := Second_Byte;
-         Second_Byte := Receive_UART;
-         Byte_Count := Byte_Count + 1;
-         if not In_Transfer then
-            In_Transfer := True;
+         if USART2_Periph.ISR.ORE /= 0 then
+         USART2_Periph.ICR.ORECF := 1; -- Clear the Overrun flag
          end if;
+         if Data_Available_UART then
+            First_Byte := Second_Byte;
+            Second_Byte := Receive_UART;
+            Byte_Count := Byte_Count + 1;
+            if not In_Transfer then
+               In_Transfer := True;
+               SPI_Enable;
+            end if;
 
-         if Byte_Count > 1 then
-            Transceive_Byte_JTAG (First_Byte);
-         end if;
-         Timeout_Count := 0;
-      else
-         if In_Transfer then
-            Timeout_Count := Timeout_Count + 1;
-            if Timeout_Count > 50_000 then
-               In_Transfer := False;
-               Timeout_Count := 0;
-               Byte_Count := 0;
-               Transceive_Last_Byte_JTAG (Second_Byte);
-               --  Pulse_TCK;
-               Pulse_TCK; -- UPDATE-DR
-      Pin_Low (TMS_PIN);
-      Pulse_TCK; -- RUN-TEST/IDLE
-      cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- Example command to read Status Register (IR=0x3A) 0A?
-      Send_Command (cmd);
+            if Byte_Count > 1 then
+               Trash := Transceive_Byte_JTAG (First_Byte);
+            end if;
+            Timeout_Count := 0;
+         else
+            if In_Transfer then
+               Timeout_Count := Timeout_Count + 1;
+               if Timeout_Count > 50_000 then
+                  In_Transfer := False;
+                  SPI_Disable;
+                  Timeout_Count := 0;
+                  Byte_Count := 0;
+                  Transceive_Last_Byte_JTAG (Second_Byte);
+                  --  Pulse_TCK;
+                  Pulse_TCK; -- UPDATE-DR
+                  Pin_Low (TMS_PIN);
+                  Pulse_TCK; -- RUN-TEST/IDLE
+                  cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- Example command to read Status Register (IR=0x3A) 0A?
+                  Send_Command (cmd);
 
-      Read_TDO;
-      
-      cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
-      Send_Command (cmd);
+                  Read_TDO;
+                  
+                  cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- Example command (IR=0x02) 08?
+                  Send_Command (cmd);
 
-      --  Something here?
-
-      --  Read SRAM
-      cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x15) 3A?
-      Send_Command (cmd);
-      cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x12) 02?
-      Send_Command (cmd);
-      cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x03) 41?
-      Send_Command (cmd);
-      Read_TDO;
+                  --  Read SRAM
+                  cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- Example command (IR=0x15) 3A?
+                  Send_Command (cmd);
+                  cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- Example command (IR=0x12) 02?
+                  Send_Command (cmd);
+                  cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x03) 41?
+                  Send_Command (cmd);
+                  Read_TDO;
+               end if;
             end if;
          end if;
-      end if;
-
-   end loop;
+      end loop;
    end Send_Configuration_Bitstream;
 
 begin
