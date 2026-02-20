@@ -1,53 +1,80 @@
-# MSP432 JTAG Compliance Tester for Gowin GW1NR-9
+# MSP432 Gowin JTAG Emulator
 
-## Overview
-This project transforms an **MSP432P4111** LaunchPad into a **JTAG Emulator** for the Gowin GW1NR-9 FPGA (Tang Nano 9k).
+## Introduction
+This project transforms an **MSP432P4111** LaunchPad into a **JTAG Slave Emulator** for the Gowin GW1NR-9 FPGA (Tang Nano 9k).
 
-The Tester strictly enforces the **Gowin Programming and Configuration Guide Documentation** and the **IEEE 1149.1 Standard**, ensuring that the Master correctly navigates the 16-state TAP controller, sends the correct command sequences (Erase, Init, Write), and transmits a valid bitstream.
+It is designed to act as a "Referee" to validate an external Master (e.g., custom STM32 hardware bridge, Raspberry Pi Pico) that is attempting to program an FPGA via the **JTAG** protocol. Instead of programming a real FPGA and guessing why it fails, you connect your Master to this MSP432. 
 
-It provides real-time feedback via **On-board LEDs** (for visual pass/fail) and a **UART Serial Terminal** (for detailed diagnostics).
+The Emulator validates the Master against both the **IEEE 1149.1 JTAG Standard** and the official **Gowin Programming and Configuration Guide Documentation**, enforcing:
+1. **TAP State Compliance:** Strict tracking of the 16-state TAP Controller (Capture, Shift, Update, Exit).
+2. **Dynamic Status Polling:** Emulates the Gowin Status Register (`0x41`), forcing the Master to properly poll for "Edit Mode" and "Erase Done" flags before proceeding.
+3. **Protocol Sequence:** Verifies the strict `ENABLE` -> `ERASE` -> `ERASE_DONE` -> `INIT` -> `WRITE` command flow.
+4. **Bi-Directional Data:** Correctly shifts out the Gowin ID Code (`0x1100481B`) and real-time status matrices on the TDO line.
 
-## Hardware Requirements
-* **Board:** TI MSP432P4111 LaunchPad
-* **Target Device:** Gowin GW1NR-9 FPGA (Tang Nano 9K)
-* **IDE:** Code Composer Studio (CCS) **v12.5.0**
+If your Master driver lights up all 5 progress LEDs on this Emulator, it is certified to work on the real Tang Nano 9k hardware.
 
-## Wiring Configuration
-Connect the JTAG Master (e.g., STM32) to the MSP432 headers as follows. Note that the MSP432 acts as the "Device" (Slave) in this setup.
+## Hardware & Software Used
+* **Board:** MSP-EXP432P4111 LaunchPad
+* **IDE:** Texas Instruments Code Composer Studio (CCS) **v12.5.0**
+* **Protocol:** IEEE 1149.1 JTAG, LSB First shifting for both IR and DR paths.
 
-| Signal Name | Direction | MSP432 Pin | MSP Header | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| **TCK** | Input | **P5.0** | J4.33 | JTAG Clock |
-| **TMS** | Input | **P5.1** | J4.34 | Test Mode Select (State Machine Control) |
-| **TDI** | Input | **P5.2** | J4.35 | Test Data In (Command/Data from Master) |
-| **TDO** | **Output**| **P5.4** | J4.37 | Test Data Out (ID Response from MSP432) |
-| **GND** | Common | **GND** | J4.22 | Common Ground Reference |
+## Wiring Connections
+Connect your JTAG Master (STM32, Pico, etc.) to the MSP432 **Port 5** header.
 
-> **Note:** The MSP432 drives **P5.4 (TDO)** to emulate the FPGA. It will reply with the Gowin ID `0x1100581B` when queried.
+**⚠️ IMPORTANT:** Ensure both boards share a common **Ground (GND)**.
 
-## LED Status Indicators
-The on-board LEDs act as a "Progress Bar" using sticky logic. Once an LED turns on, it stays on until the next Reset.
+| Signal | MSP432 Pin | Direction | Description |
+| :--- | :--- | :--- | :--- |
+| **TCK** | **P5.0** | Input | JTAG Test Clock |
+| **TMS** | **P5.1** | Input | Test Mode Select (Drives TAP State Machine) |
+| **TDI** | **P5.2** | Input | Test Data In (Commands/Bitstream from Master) |
+| **TDO** | **P5.4** | Output | Test Data Out (ID/Status Readback to Master) |
 
-| LED Color | Checkpoint | Meaning |
-| :--- | :--- | :--- |
-| **White** (P4.0) | **RESET** | **JTAG Reset Detected.** The Master successfully toggled TMS High >= 5 times. |
-| **Yellow** (P4.1) | **ID CHECK** | **Valid ID Read.** The Master requested `0x11` (IDCODE). The MSP432 replied with the fake ID. |
-| **Blue** (P4.3) | **ERASE** | **Erase Sequence Complete.** The Master sent `0x05` (Erase), waited, and sent `0x09` (Erase Done). |
-| **Green** (P4.2) | **PASS** | **Bitstream Verified.** The Master sent `0x17` (Write) followed by a valid data stream (>100k bits). |
-| **Red** (P4.4) | **FAIL** | **Protocol Violation.** The Master failed to erase, sent an empty file, or broke the protocol. |
+## Visual Diagnostics (Port 4 LEDs)
+Connect 6 LEDs to Port 4 (P4.0 - P4.5) to view the "Progress Bar" of the configuration sequence. The logic is sticky; once a milestone is reached, the LED remains on until a TAP Reset.
 
-## UART Terminal Usage
-For detailed error reporting, connect the MSP432 to a PC via USB.
+| LED Pin | Name | Meaning | Progress State |
+| :--- | :--- | :--- | :--- |
+| **P4.0** | **PROG_1** | **TAP Reset** | **[ON]** Master sent 5+ TMS High clocks. TAP is reset. |
+| **P4.1** | **PROG_2** | **ID Checked** | **[ON]** Master successfully read the 32-bit IDCODE from TDO. |
+| **P4.2** | **PROG_3** | **Erase Start** | **[ON]** Master sent the `0x05` Erase SRAM command. |
+| **P4.3** | **PROG_4** | **Erase Done** | **[ON]** Master sent the `0x09` Erase Done command. |
+| **P4.4** | **PROG_5** | **Success** | **[ON]** Bitstream loaded successfully (>100k bits). |
+| **P4.5** | **FAIL** | **Error** | **[ON]** Protocol violation (e.g., Write without Erase). |
 
+### The "Progress Bar"
+A successful programming sequence will light up the LEDs in order:
+1. `[X] [ ] [ ] [ ] [ ]` (Reset)
+2. `[X] [X] [ ] [ ] [ ]` (ID Verified)
+3. `[X] [X] [X] [ ] [ ]` (Erasing Memory)
+4. `[X] [X] [X] [X] [ ]` (Erase Confirmed)
+5. `[X] [X] [X] [X] [X]` (Configuration Complete!)
+
+## Indicators & UART
+This project uses the **UART Backchannel** (USB to PC) to provide a highly detailed, real-time diagnostic log of the JTAG TAP states and latched commands. 
+
+### UART Setup
 * **Baud Rate:** 9600
 * **Data Bits:** 8
 * **Parity:** None
 * **Stop Bits:** 1
-* **Flow Control:** None
+* **Terminal:** Use the built-in CCS Terminal, PuTTY, or TeraTerm connected to the LaunchPad's Application/User UART COM port.
+
+### Terminal Output Examples
+* `[STATE] JTAG TAP Reset.` -> Master reset the TAP controller.
+* `[CMD]   0x41 (READ STATUS) Master is Polling...` -> Master is checking the dynamic hardware flags.
+* `[CMD]   0x05 (ERASE SRAM) Latched. Simulating erase...` -> Erase sequence began.
+* `[FAIL]  Protocol violation detected.` -> **Error:** Master broke the configuration flow.
+* `[PASS]  Bitstream Transmitted! Bits counted: 3555440` -> Configuration successful.
+
+## Critical Operational Notes
+1. **IEEE 1149.1 Defaults:** The emulator enforces the standard that the Instruction Register (IR) must automatically default to `IDCODE (0x11)` immediately following a TAP Reset.
+2. **Strict Erase Sequence:** Sending the Erase command (`0x05`) is not enough. The Master **must** follow up with the Erase Done command (`0x09`) before attempting to write. If `0x09` is skipped, the emulator will reject the bitstream.
+3. **Dynamic Status Polling:** The emulator actively toggles bits in the `0x41` Status Register (like Edit Mode and Erase Active). A compliant Master should implement polling loops rather than blind delays to ensure these bits settle before proceeding.
 
 ## Building the Project
-1.  Import `main.c` into your CCS Workspace.
-2.  Ensure the Target is set to your specific MSP432 variant.
-3.  Build (Hammer Icon). 
-    * *Note:* Warnings about "Software Delay Loops" (ULP 2.1) are expected and safe for this specific emulation context.
-4.  Flash and Run. Open the Terminal to view the emulator status.
+1. Import `main.c` into your CCS Workspace.
+2. Ensure the Target is set to your specific MSP432 variant.
+3. Build (Hammer Icon). 
+   * *Note:* Warnings about "Software Delay Loops" (ULP 2.1) are expected and safe for this specific emulation context.
+4. Flash and Run. Open the Terminal to view the emulator status.
