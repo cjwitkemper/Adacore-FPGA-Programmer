@@ -97,8 +97,8 @@ procedure jtag_test is
       --  Set Alternate function for PA2, PA3 (AF1 for USART2)
       GPIOA_Periph.AFRL.Arr (2) := 1; --  AF1 for USART2
       GPIOA_Periph.AFRL.Arr (3) := 1; --  AF1 for USART2
-      GPIOA_Periph.AFRL.Arr (9) := 1; --  AF1 for USART1
-      GPIOA_Periph.AFRL.Arr (10) := 1; --  AF1 for USART1
+      GPIOA_Periph.AFRH.Arr (9) := 1; --  AF1 for USART1
+      GPIOA_Periph.AFRH.Arr (10) := 1; --  AF1 for USART1
 
       --  Initial CS Low(PA4) and TCK, TMS, TDI Low
       GPIOA_Periph.BSRR.BR.Arr (4) := 1;
@@ -134,8 +134,6 @@ procedure jtag_test is
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
-      --  Asm ("nop", Volatile => True);
-      --  Asm ("nop", Volatile => True);
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
@@ -383,7 +381,6 @@ procedure jtag_test is
       end loop;
    end Send_Configuration_Bitstream;
 
-   subtype Word32 is Unsigned_32;
    procedure Send_Firmware is
    begin
       --  USART2 Configuration (19200 Baud @ 48MHz)
