@@ -80,22 +80,25 @@ procedure jtag_test is
       --  Enable GPIOA
       RCC_Periph.AHBENR.IOPAEN := 1;
 
-      --  Enable USART2
+      --  Enable USART1 & USART2
+      RCC_Periph.APB2ENR.USART1EN := 1;
       RCC_Periph.APB1ENR.USART2EN := 1;
 
-      --  PA0, PA2, PA3, PA4, PA5, PA6, PA7
-      GPIOA_Periph.MODER.Arr (0) := 2;
+      --  PA2, PA3, PA4, PA5, PA6, PA7, PA9, PA10
       GPIOA_Periph.MODER.Arr (2) := 2;
       GPIOA_Periph.MODER.Arr (3) := 2;
       GPIOA_Periph.MODER.Arr (4) := 1;
       GPIOA_Periph.MODER.Arr (5) := 1;
       GPIOA_Periph.MODER.Arr (6) := 0;
       GPIOA_Periph.MODER.Arr (7) := 1;
+      GPIOA_Periph.MODER.Arr (9) := 2;
+      GPIOA_Periph.MODER.Arr (10) := 2;
 
       --  Set Alternate function for PA2, PA3 (AF1 for USART2)
-      GPIOA_Periph.AFRL.Arr (0) := 1; --  AF1 for USART2
       GPIOA_Periph.AFRL.Arr (2) := 1; --  AF1 for USART2
       GPIOA_Periph.AFRL.Arr (3) := 1; --  AF1 for USART2
+      GPIOA_Periph.AFRL.Arr (9) := 1; --  AF1 for USART1
+      GPIOA_Periph.AFRL.Arr (10) := 1; --  AF1 for USART1
 
       --  Initial CS Low(PA4) and TCK, TMS, TDI Low
       GPIOA_Periph.BSRR.BR.Arr (4) := 1;
@@ -103,7 +106,17 @@ procedure jtag_test is
       GPIOA_Periph.BSRR.BR.Arr (6) := 1;
       GPIOA_Periph.BSRR.BR.Arr (7) := 1;
 
-      USART2_Periph.CR3.CTSE := 1;
+      --  USART1 Configuration (19200 Baud @ 48MHz)
+      USART1_Periph.BRR := (DIV_Mantissa => 16#9C4#,
+                            DIV_Fraction => 16#0#,
+                            others       => <>);
+
+      --  Enable UART, Transmit, and Receive
+      USART1_Periph.CR1 := (UE     => 1,
+                            TE     => 1,
+                            RE     => 1,
+                            OVER8  => 0,
+                            others => <>);
 
       --  USART2 Configuration (2,000,000 Baud @ 48MHz)
       USART2_Periph.BRR := (DIV_Mantissa => 16#01#,
@@ -114,7 +127,6 @@ procedure jtag_test is
       USART2_Periph.CR1 := (UE     => 1,
                             TE     => 1,
                             RE     => 1,
-                            RXNEIE => 0,
                             OVER8  => 0,
                             others => <>);
    end Initialize_Hardware;
@@ -122,8 +134,8 @@ procedure jtag_test is
    procedure Pulse_TCK is
    begin
       Pin_Low (TCK_Pin);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
+      --  Asm ("nop", Volatile => True);
+      --  Asm ("nop", Volatile => True);
       Pin_High (TCK_Pin);
    end Pulse_TCK;
 
@@ -170,7 +182,7 @@ procedure jtag_test is
 
          end if;
          Pulse_TCK;
-         delay 0.0001;
+         --  delay 0.0001;
       end loop;
       Pulse_TCK; -- UPDATE-IR
       Pin_Low (TMS_PIN);
@@ -371,10 +383,41 @@ procedure jtag_test is
       end loop;
    end Send_Configuration_Bitstream;
 
+   subtype Word32 is Unsigned_32;
+   procedure Send_Firmware is
+   begin
+      --  USART2 Configuration (19200 Baud @ 48MHz)
+      USART2_Periph.BRR := (DIV_Mantissa => 16#9C4#,
+                            DIV_Fraction => 16#0#,
+                            others       => <>);
+      loop
+      --  Laptop --> Tang Nano
+      if USART2_Periph.ISR.RXNE /= 0 then
+         declare
+            Byte : constant RDR_RDR_Field := USART2_Periph.RDR.RDR;
+         begin
+            while (USART1_Periph.ISR.TXE = 0) loop null; end loop;
+            USART1_Periph.TDR.TDR := Byte;
+         end;
+      end if;
+ 
+      --  Tang Nano --> Laptop
+      if USART1_Periph.ISR.RXNE /= 0 then
+         declare
+            Byte : constant RDR_RDR_Field := USART1_Periph.RDR.RDR;
+         begin
+            while (USART2_Periph.ISR.TXE = 0) loop null; end loop;
+            USART2_Periph.TDR.TDR := Byte;
+         end;
+      end if;
+   end loop;
+   end Send_Firmware;
+
 begin
    --  TODO: Add UART command handling to trigger different JTAG operations (e.g., read IDCODE, send configuration bitstream, etc.)
    Initialize_Hardware;
    Reset_TAP;
    Init_Configuration;
    Send_Configuration_Bitstream;
+   Send_Firmware;
 end jtag_test;
