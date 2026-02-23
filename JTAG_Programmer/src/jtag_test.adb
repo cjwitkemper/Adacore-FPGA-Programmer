@@ -107,8 +107,8 @@ procedure jtag_test is
       GPIOA_Periph.BSRR.BR.Arr (7) := 1;
 
       --  USART1 Configuration (19200 Baud @ 48MHz)
-      USART1_Periph.BRR := (DIV_Mantissa => 16#9C4#,
-                            DIV_Fraction => 16#0#,
+      USART1_Periph.BRR := (DIV_Mantissa => 16#9C#,
+                            DIV_Fraction => 16#04#,
                             others       => <>);
 
       --  Enable UART, Transmit, and Receive
@@ -224,7 +224,6 @@ procedure jtag_test is
    begin
       return Byte (USART2_Periph.RDR.RDR);
    end Receive_UART;
-
 
    --  MAIN FUNCTIONS : CALLED BY UART COMMANDS
    procedure Reset_TAP is
@@ -375,6 +374,8 @@ procedure jtag_test is
                   cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- Example command (IR=0x03) 41?
                   Send_Command (cmd);
                   Read_TDO;
+
+                  exit;
                end if;
             end if;
          end if;
@@ -383,10 +384,19 @@ procedure jtag_test is
 
    procedure Send_Firmware is
    begin
+      while USART2_Periph.ISR.TC /= 1 loop null; end loop; -- Wait for any previous transmission to complete
+
+      USART2_Periph.CR1.UE := 0;
+      USART2_Periph.CR1.TE := 0;
+      USART2_Periph.CR1.RE := 0;
       --  USART2 Configuration (19200 Baud @ 48MHz)
-      USART2_Periph.BRR := (DIV_Mantissa => 16#9C4#,
-                            DIV_Fraction => 16#0#,
+      USART2_Periph.BRR := (DIV_Mantissa => 16#9C#,
+                            DIV_Fraction => 16#04#,
                             others       => <>);
+      USART2_Periph.CR1.UE := 1;
+      USART2_Periph.CR1.TE := 1;
+      USART2_Periph.CR1.RE := 1;
+      
       loop
       --  Laptop --> Tang Nano
       if USART2_Periph.ISR.RXNE /= 0 then
