@@ -437,16 +437,16 @@ procedure Send_Firmware is
       while USART2_Periph.ISR.TC = 0 loop null; end loop;
  
       --  Reconfigure USART2 to 19200 baud to match USART1 / Tang Nano side
-      --  USART2_Periph.CR1 := (UE => 0, others => <>);
-      --  USART2_Periph.BRR := (DIV_Mantissa => 16#9C#, DIV_Fraction => 16#04#, others => <>);
-      --  USART2_Periph.CR3.DMAR := 1;
-      --  USART2_Periph.CR1 := (UE => 1, TE => 1, RE => 1, others => <>);
+      USART2_Periph.CR1 := (UE => 0, others => <>);
+      USART2_Periph.BRR := (DIV_Mantissa => 16#9C#, DIV_Fraction => 16#04#, others => <>);
+      USART2_Periph.CR3.DMAR := 1;
+      USART2_Periph.CR1 := (UE => 1, TE => 1, RE => 1, others => <>);
  
       --  --  Reconfigure DMA1 Channel 5 (USART2 RX) with updated baud — disable,
       --  --  reload CNDTR, re-enable so the channel is in a clean state.
-      --  DMA1_Periph.CCR5.EN  := 0;
-      --  DMA1_Periph.CNDTR5.NDT := UInt16 (Buffer_Size);
-      --  DMA1_Periph.CCR5.EN  := 1;
+      DMA1_Periph.CCR5.EN  := 0;
+      DMA1_Periph.CNDTR5.NDT := UInt16 (Buffer_Size);
+      DMA1_Periph.CCR5.EN  := 1;
  
       --  Snapshot current DMA write positions so we ignore bytes that
       --  arrived before Send_Firmware was entered.
