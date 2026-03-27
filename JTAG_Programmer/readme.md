@@ -12,8 +12,6 @@ ls /dev/ttyACM*
 sudo stty -F /dev/ttyACM0 2000000 raw -echo  
 sudo cat output1.bin > /dev/ttyACM0  
 
-To update a bin file with bits  
-printf "\x01\x00\x01\x01" > bitstream.bin  
-
-To check the contents of a bin file
-hexdump -C bitstream.bin  
+To Send Firmware
+sudo stty -F /dev/ttyACM0 19200 raw -echo  
+sudo cat hello.exe > /dev/ttyACM0  
