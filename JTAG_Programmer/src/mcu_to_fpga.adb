@@ -1,6 +1,14 @@
+with STM32F0x0;               use STM32F0x0;
+with STM32F0x0.RCC;           use STM32F0x0.RCC;
+with STM32F0x0.GPIO;          use STM32F0x0.GPIO;
+with STM32F0x0.SPI;           use STM32F0x0.SPI;
+with STM32F0x0.USART;         use STM32F0x0.USART;
+with STM32F0x0.DMA;           use STM32F0x0.DMA;
+with System.Storage_Elements; use System.Storage_Elements;
+with Utils; use Utils;
 procedure mcu_to_fpga is
 
-     procedure Send_Command (c : Bit_Array) is
+   procedure Send_Command (c : Bit_Array) is
    begin
       Pin_High (TMS_PIN);
       Pulse_TCK; -- SELECT-DR-SCAN
@@ -136,7 +144,208 @@ procedure mcu_to_fpga is
       end loop;
    end Reset_TAP;
 
+   function Get_TDO return Bit is
+   begin
+      return GPIOA_Periph.IDR.IDR.Arr (TDO_Pin);
+   end Get_TDO;
+
+   procedure Send_Configuration_Bitstream is
+      cmd : Bit_Array (0 .. 7);
+   begin
+      Pin_High (tms_pin);
+      Pulse_TCK; -- SELECT-DR-SCAN
+      Pin_Low (tms_pin);
+      Pulse_TCK; -- CAPTURE-DR
+      Pulse_TCK; -- Shift-DR
+      SPI_Enable;
+      loop
+         Write_Idx := Buffer_Size - Natural (DMA1_Periph.CNDTR5.NDT);
+
+         --  Check if the write pointer has moved since last iteration
+         if Write_Idx /= Last_Write_Idx then
+            --  New data has arrived: reset the stability counter
+            Stable_Count := 0;
+            Last_Write_Idx := Write_Idx;
+         else
+            --  Write pointer is stable (no new bytes from DMA this iteration)
+            if Has_Data then
+               Stable_Count := Stable_Count + 1;
+            end if;
+         end if;
+
+         --  Process any newly arrived bytes, keeping the last one in reserve
+         if Write_Idx /= Read_Idx then
+            Has_Data := True;
+
+            if Write_Idx > Read_Idx then
+               for I in Read_Idx .. Write_Idx - 2 loop
+                  Transceive_Byte (DMA_Buffer (I));
+               end loop;
+               Read_Idx := Write_Idx - 1;
+            else
+               if Write_Idx = 0 then
+                  for I in Read_Idx .. Buffer_Size - 2 loop
+                     Transceive_Byte (DMA_Buffer (I));
+                  end loop;
+                  Read_Idx := Buffer_Size - 1;
+               else
+                  for I in Read_Idx .. Buffer_Size - 1 loop
+                     Transceive_Byte (DMA_Buffer (I));
+                  end loop;
+                  for I in 0 .. Write_Idx - 2 loop
+                     Transceive_Byte (DMA_Buffer (I));
+                  end loop;
+                  Read_Idx := Write_Idx - 1;
+               end if;
+            end if;
+         end if;
+
+         --  Timeout
+         if Has_Data and then Stable_Count >= Stable_Threshold then
+            SPI_Disable;
+            Transceive_Last_Byte_JTAG (DMA_Buffer (Read_Idx));
+            Read_Idx := (Read_Idx + 1) mod Buffer_Size;
+            Pulse_TCK; -- UPDATE-DR
+            Pin_Low (tms_pin);
+            Pulse_TCK; -- RUN-TEST/IDLE
+            cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- (IR=0x0A)
+            Send_Command (cmd);
+            Read_TDO;
+            cmd := (0, 0, 0, 1, 0, 0, 0, 0); -- (IR=0x08)
+            Send_Command (cmd);
+            --  Read SRAM
+            cmd := (0, 1, 0, 1, 1, 1, 0, 0); -- IR=0x3A)
+            Send_Command (cmd);
+            cmd := (0, 1, 0, 0, 0, 0, 0, 0); -- (IR=0x02)
+            Send_Command (cmd);
+            cmd := (1, 0, 0, 0, 0, 0, 1, 0); -- (IR=0x41)
+            Send_Command (cmd);
+            Read_TDO;
+            exit;
+
+         end if;
+
+      end loop;
+   end Send_Configuration_Bitstream;
+
+   procedure Send_Firmware is
+      --  Read indices into the two circular DMA buffers for this session
+      U2_Read_Idx      : Natural;
+      U1_Read_Idx      : Natural;
+      U2_Write         : Natural;
+      U1_Write         : Natural;
+      Last_U2_Write    : Natural;
+      Stable_Count     : Natural := 0;
+      Stable_Threshold : constant := 10_000;
+      Has_Data         : Boolean := False;
+   begin
+      --  Wait for any in-flight USART2 TX to finish before reconfiguring
+      while USART2_Periph.ISR.TC = 0 loop
+         null;
+      end loop;
+
+      --  Reconfigure USART2 to 19200 baud to match USART1 / Tang Nano side
+      USART2_Periph.CR1 := (UE => 0, others => <>);
+      USART2_Periph.BRR :=
+        (DIV_Mantissa => 16#9C#, DIV_Fraction => 16#04#, others => <>);
+      USART2_Periph.CR3.DMAR := 1;
+      USART2_Periph.CR1 := (UE => 1, TE => 1, RE => 1, others => <>);
+
+      --  Reconfigure DMA1 Channel 5 (USART2 RX) with updated baud — disable,
+      --  reload CNDTR, re-enable so the channel is in a clean state.
+      DMA1_Periph.CCR5.EN := 0;
+      DMA1_Periph.CNDTR5.NDT := UInt16 (Buffer_Size);
+      DMA1_Periph.CCR5.EN := 1;
+
+      U2_Read_Idx := Buffer_Size - Natural (DMA1_Periph.CNDTR5.NDT);
+      U1_Read_Idx := Buffer_Size - Natural (DMA1_Periph.CNDTR3.NDT);
+      Last_U2_Write := U2_Read_Idx;
+
+      delay 0.1;
+      USART1_Periph.TDR.TDR := RDR_RDR_Field (16#75#);
+      delay 0.1;
+      USART1_Periph.TDR.TDR := RDR_RDR_Field (16#75#);
+
+      while U2_Read_Idx = Buffer_Size - Natural (DMA1_Periph.CNDTR5.NDT) loop
+         null;
+      end loop;
+
+      loop
+         --  Snapshot write pointer ONCE at the top before any draining
+         U2_Write := Buffer_Size - Natural (DMA1_Periph.CNDTR5.NDT);
+
+         if U2_Write /= Last_U2_Write then
+            Stable_Count := 0;
+            Last_U2_Write := U2_Write;
+            Has_Data := True;
+         else
+            if Has_Data then
+               Stable_Count := Stable_Count + 1;
+            end if;
+         end if;
+
+         --  Drain only up to the snapshot — do NOT re-read CNDTR5 here
+         while U2_Read_Idx /= U2_Write loop
+            while USART1_Periph.ISR.TXE = 0 loop
+               null;
+            end loop;
+            USART1_Periph.TDR.TDR := RDR_RDR_Field (DMA_Buffer (U2_Read_Idx));
+            U2_Read_Idx := (U2_Read_Idx + 1) mod Buffer_Size;
+         end loop;
+
+         --  Tang Nano --> Laptop (unchanged)
+         U1_Write := Buffer_Size - Natural (DMA1_Periph.CNDTR3.NDT);
+         while U1_Read_Idx /= U1_Write loop
+            while USART2_Periph.ISR.TXE = 0 loop
+               null;
+            end loop;
+            USART2_Periph.TDR.TDR := RDR_RDR_Field (DMA1_Buffer (U1_Read_Idx));
+            U1_Read_Idx := (U1_Read_Idx + 1) mod Buffer_Size;
+         end loop;
+
+         exit when Has_Data and then Stable_Count >= Stable_Threshold;
+      end loop;
+
+      while USART1_Periph.ISR.TC = 0 loop
+         null;
+      end loop;
+
+      --  Clear TC flag by writing to ICR before sending next byte
+      USART1_Periph.ICR.TCCF := 1;
+
+      while USART1_Periph.ISR.TXE = 0 loop
+         null;
+      end loop;
+      USART1_Periph.TDR.TDR := RDR_RDR_Field (16#65#);
+
+      --  Wait for this byte to finish too
+      while USART1_Periph.ISR.TC = 0 loop
+         null;
+      end loop;
+
+      loop
+         null;
+      end loop;
+   end Send_Firmware;
+
+   Initialized : Boolean := False;
+   task body M2F is 
    
+   begin
+      case Utils.Get_State is 
+         when IDLE =>
+            null;
+         when PROG_BITSTREAM =>
+            if not Initialized then
+               Reset_TAP;
+               Initialized := True;
+            end if;
+            Init_Configuration;
+            Send_Configuration_Bitstream;
+         when PROG_FIRMWARE =>
+            Send_Firmware;
+      end case;
+   end M2F;   
 
 begin
    null;
