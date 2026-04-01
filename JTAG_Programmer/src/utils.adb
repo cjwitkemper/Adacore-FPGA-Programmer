@@ -1,19 +1,24 @@
-with Main;
-with Utils;
-procedure Utils is
+pragma Style_Checks (Off);
 
-   protected body State is
+with STM32F0x0;               use STM32F0x0;
+with STM32F0x0.RCC;           use STM32F0x0.RCC;
+with STM32F0x0.GPIO;          use STM32F0x0.GPIO;
+with STM32F0x0.SPI;           use STM32F0x0.SPI;
 
-   procedure Set_State (V : in ProgState) is
+package body utils is
+
+   protected body ProgState is
+
+   procedure Set (V : in State) is
    begin
-      pState := V;
-   end Set_State;
-
-   function Get_State return ProgState is
+      Value := V;
+   end Set;
+   function Get return State is
    begin
-      return pState;
-   end Get_State;
-   end State;
+      return Value;
+   end Get;
+   end ProgState;
+
 
    procedure Pin_Low (Pin : Natural) is
    begin
@@ -27,10 +32,8 @@ procedure Utils is
 
    procedure Pulse_TCK is
    begin
-      Pin_Low (TCK_Pin);
-      Asm ("nop", Volatile => True);
-      Asm ("nop", Volatile => True);
-      Pin_High (TCK_Pin);
+      GPIOA_Periph.BSRR.BR.Arr (TCK_Pin) := 1;
+      GPIOA_Periph.BSRR.BS.Arr (TCK_Pin) := 1;
    end Pulse_TCK;
 
     procedure SPI_Enable is
@@ -78,6 +81,31 @@ procedure Utils is
       RCC_Periph.APB2ENR.SPI1EN := 0;
    end SPI_Disable;
 
-begin
+   procedure Transceive_Byte (Data_Out : Byte) is
+      DR_Byte : Byte
+      with Address => SPI1_Periph.DR'Address;
+   begin
+      while SPI1_Periph.SR.TXE = 0 loop
+         null;
+      end loop;
+      DR_Byte := Data_Out;
+   end Transceive_Byte;
+
+   procedure Transceive_Last_Byte_JTAG (Data_Out : Byte) is
+   begin
+      for Bit in reverse 0 .. 7 loop
+         if Bit = 0 then
+            Pin_High (tms_pin);
+         end if;
+
+         if (Data_Out and Shift_Left (1, Bit)) /= 0 then
+            Pin_High (TDI_Pin);
+         else
+            Pin_Low (TDI_Pin);
+         end if;
+
+         Pulse_TCK;
+      end loop;
+   end Transceive_Last_Byte_JTAG;
 
 end Utils;

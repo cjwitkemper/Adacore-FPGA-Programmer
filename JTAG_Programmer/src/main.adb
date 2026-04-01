@@ -1,10 +1,8 @@
-with STM32F0x0;               use STM32F0x0;
-with STM32F0x0.RCC;           use STM32F0x0.RCC;
-with STM32F0x0.GPIO;          use STM32F0x0.GPIO;
-with STM32F0x0.SPI;           use STM32F0x0.SPI;
-with STM32F0x0.USART;         use STM32F0x0.USART;
-with STM32F0x0.DMA;           use STM32F0x0.DMA;
-with System.Storage_Elements; use System.Storage_Elements;
+pragma Style_Checks (Off);
+with STM32F0x0; use STM32F0x0;
+with STM32F0x0.RCC; use STM32F0x0.RCC;
+with STM32F0x0.GPIO; use STM32F0x0.GPIO;
+with STM32F0x0.USART; use STM32F0x0.USART;
 with host_to_mcu; use host_to_mcu;
 with mcu_to_fpga; use mcu_to_fpga;
 with utils; use utils;
@@ -56,9 +54,6 @@ procedure Initialize_Hardware is
                             others => <>);
    end Initialize_Hardware;
 
-begin
-   Initialize_Hardware;
-   H2M.Start;
-   M2F.Start;
-
+   begin
+      Initialize_Hardware;
 end Main;

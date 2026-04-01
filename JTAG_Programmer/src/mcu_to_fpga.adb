@@ -1,3 +1,4 @@
+pragma Style_Checks (Off);
 with STM32F0x0;               use STM32F0x0;
 with STM32F0x0.RCC;           use STM32F0x0.RCC;
 with STM32F0x0.GPIO;          use STM32F0x0.GPIO;
@@ -5,8 +6,16 @@ with STM32F0x0.SPI;           use STM32F0x0.SPI;
 with STM32F0x0.USART;         use STM32F0x0.USART;
 with STM32F0x0.DMA;           use STM32F0x0.DMA;
 with System.Storage_Elements; use System.Storage_Elements;
-with Utils; use Utils;
-procedure mcu_to_fpga is
+package body mcu_to_fpga is
+
+   Write_Idx        : Natural;
+   Read_Idx         : Natural := 0;
+   Last_Write_Idx   : Natural := Buffer_Size;
+   Stable_Count     : Natural := 0;
+   Stable_Threshold : constant :=
+     10_000; -- tune this to ~several ms of silence
+   Has_Data         : Boolean := False;
+   cmd : Bit_Array (0 .. 7);
 
    procedure Send_Command (c : Bit_Array) is
    begin
@@ -114,8 +123,7 @@ procedure mcu_to_fpga is
       Send_Command (cmd);
    end Init_Configuration;
 
-   function Read_IDCODE return Bit_Array is
-      IDCODE : Bit_Array (0 .. 31);
+   procedure Read_IDCODE is
    begin
       Pin_High (TMS_PIN);
       Pulse_TCK; -- SELECT-DR-SCAN
@@ -125,7 +133,6 @@ procedure mcu_to_fpga is
          if (I = 31) then
             Pin_High (TMS_PIN); -- Pull TMS high on the last bit to exit
          end if;
-         IDCODE (I) := Get_TDO;
          Pulse_TCK;
       end loop;
       Pin_High (TMS_PIN);
@@ -133,7 +140,6 @@ procedure mcu_to_fpga is
       Pin_Low (TMS_PIN);
       Pulse_TCK; -- RUN-TEST/IDLE
       Pulse_TCK; -- Extra pulse to ensure the FPGA has time to process the command
-      return IDCODE;
    end Read_IDCODE;
 
    procedure Reset_TAP is
@@ -143,11 +149,6 @@ procedure mcu_to_fpga is
          Pulse_TCK;
       end loop;
    end Reset_TAP;
-
-   function Get_TDO return Bit is
-   begin
-      return GPIOA_Periph.IDR.IDR.Arr (TDO_Pin);
-   end Get_TDO;
 
    procedure Send_Configuration_Bitstream is
       cmd : Bit_Array (0 .. 7);
@@ -179,7 +180,7 @@ procedure mcu_to_fpga is
 
             if Write_Idx > Read_Idx then
                for I in Read_Idx .. Write_Idx - 2 loop
-                  Transceive_Byte (DMA_Buffer (I));
+                  Transceive_Byte(DMA_Buffer (I));
                end loop;
                Read_Idx := Write_Idx - 1;
             else
@@ -206,7 +207,7 @@ procedure mcu_to_fpga is
             Transceive_Last_Byte_JTAG (DMA_Buffer (Read_Idx));
             Read_Idx := (Read_Idx + 1) mod Buffer_Size;
             Pulse_TCK; -- UPDATE-DR
-            Pin_Low (tms_pin);
+            Pin_Low (TMS_Pin);
             Pulse_TCK; -- RUN-TEST/IDLE
             cmd := (0, 1, 0, 1, 0, 0, 0, 0); -- (IR=0x0A)
             Send_Command (cmd);
@@ -328,25 +329,24 @@ procedure mcu_to_fpga is
       end loop;
    end Send_Firmware;
 
-   Initialized : Boolean := False;
-   task body M2F is 
-   
-   begin
-      case Utils.Get_State is 
-         when IDLE =>
-            null;
-         when PROG_BITSTREAM =>
-            if not Initialized then
-               Reset_TAP;
-               Initialized := True;
-            end if;
-            Init_Configuration;
-            Send_Configuration_Bitstream;
-         when PROG_FIRMWARE =>
-            Send_Firmware;
-      end case;
-   end M2F;   
 
-begin
-   null;
+   task body M2F is
+   begin
+      loop
+         case Current_State.Get is
+            when IDLE =>
+               null;
+            when INIT_CONFIG =>
+               Reset_TAP;
+               Init_Configuration;
+            when PROG_BITSTREAM =>
+               Send_Configuration_Bitstream;
+            when PROG_FIRMWARE =>
+               Send_Firmware;
+            when ESCAPE =>
+               exit;
+         end case;
+      end loop;
+   end M2F;
+
 end mcu_to_fpga;
