@@ -1,0 +1,177 @@
+V "GNAT Lib v15"
+M P W=8
+A -Og
+A -gnatA
+A --RTS=/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/
+A -mlittle-endian
+A -mthumb
+A -mfloat-abi=soft
+A -mcpu=cortex-m0
+A -fno-tree-loop-distribute-patterns
+A -ffunction-sections
+A -fdata-sections
+A -g
+A -gnatwa
+A -gnatw.X
+A -gnatVa
+A -gnaty3
+A -gnatya
+A -gnatyA
+A -gnatyB
+A -gnatyb
+A -gnatyc
+A -gnaty-
+A -gnatyd
+A -gnatye
+A -gnatyf
+A -gnatyh
+A -gnatyi
+A -gnatyI
+A -gnatyk
+A -gnatyl
+A -gnatym
+A -gnatyn
+A -gnatyO
+A -gnatyp
+A -gnatyr
+A -gnatyS
+A -gnatyt
+A -gnatyu
+A -gnatyx
+A -gnatW8
+A -mlibarch=armv6s-m
+A -march=armv6s-m
+P DB LC TF ZX
+
+RN
+RV NO_DELAY
+RV NO_FIXED_POINT
+RV NO_RELATIVE_DELAY
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_DYNAMIC_SIZED_OBJECTS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U jtag_test%b		jtag_test.adb		b9f2b82f NE OO SU IL
+W ada%s			ada.ads			ada.ali
+W ada.real_time%s	a-reatim.adb		a-reatim.ali
+Z ada.real_time.delays%s  a-retide.adb		a-retide.ali
+W interfaces%s		interfac.ads		interfac.ali
+W stm32f0x0%s		stm32f0x0.ads		stm32f0x0.ali
+W stm32f0x0.gpio%s	stm32f0x0-gpio.ads	stm32f0x0-gpio.ali
+W stm32f0x0.rcc%s	stm32f0x0-rcc.ads	stm32f0x0-rcc.ali
+Z system.relative_delays%s  s-reldel.adb	s-reldel.ali
+
+D ada.ads		20251027214111 76789da1 ada%s
+D a-reatim.ads		20251027214111 cfe92427 ada.real_time%s
+D a-retide.ads		20251027214111 081cdaa4 ada.real_time.delays%s
+D interfac.ads		20251027214111 9111f9c1 interfaces%s
+D jtag_test.adb		20260217225832 1f0813ed jtag_test%b
+D light_tasking_stm32f0xx_config.ads  20251027214111 cb262c4f light_tasking_stm32f0xx_config%s
+D stm32f0x0.ads		20260217010437 84d9a5e4 stm32f0x0%s
+D stm32f0x0-gpio.ads	20260217010437 22485c07 stm32f0x0.gpio%s
+D stm32f0x0-rcc.ads	20260217010437 5e938fc7 stm32f0x0.rcc%s
+D stm32f0xx_runtime_config.ads  20251027214111 c249947a stm32f0xx_runtime_config%s
+D system.ads		20251027214111 1a7ed960 system%s
+D s-bb.ads		20251027214111 09e072ae system.bb%s
+D s-bbbopa.ads		20251027214111 f35c1345 system.bb.board_parameters%s
+D s-bbbosu.ads		20251027214111 0f820a2a system.bb.board_support%s
+D s-bbcppr.ads		20251027214111 c529bbcc system.bb.cpu_primitives%s
+D s-bbinte.ads		20251027214111 cf617f22 system.bb.interrupts%s
+D s-bbmcpa-full.ads	20251027214111 cf4fc046 system.bb.mcu_parameters%s
+D s-bbpara.ads		20251027214111 c93e43e4 system.bb.parameters%s
+D s-bbthre.ads		20251027214111 5f49caa9 system.bb.threads%s
+D s-bbthqu.ads		20251027214111 cd23d79e system.bb.threads.queues%s
+D s-bbtime.ads		20251027214111 ad086247 system.bb.time%s
+D s-multip.ads		20251027214111 f33e0e35 system.multiprocessors%s
+D s-osinte.ads		20251027214111 229b14dd system.os_interface%s
+D s-reldel.ads		20251027214111 d2ec2544 system.relative_delays%s
+D s-stoele.ads		20251027214111 ccded4e8 system.storage_elements%s
+D s-unstyp.ads		20251027214111 fa2a7f59 system.unsigned_types%s
+G a e
+G c Z b b [jtag_test standard 7 11 none]
+X 1 ada.ads
+18K9*Ada 22e8 5|5r6 5r26 67r9
+X 2 a-reatim.ads
+52K13*Real_Time 193e18 5|5w10 5r30 67r13
+62M9*Time<21|46M9>
+72I9*Time_Span<21|81I9>
+79V13*Clock{62M9}<21|134p13> 5|67s23
+83V14*"+"{62M9} 5|67s29
+135V13*Nanoseconds{72I9} 5|67s31
+X 4 interfac.ads
+47K9*Interfaces 247e15 5|1w6 1r26
+81M9*Unsigned_8
+92M9*Unsigned_32 5|14r11
+104V13*Shift_Left{81M9} 5|132s27
+X 5 jtag_test.adb
+7U11*jtag_test 7b11 235l5 235t14
+8N4 TMS_Pin 57r20 59r19
+9N4 TCK_Pin 65r16 68r17
+10N4 TDO_Pin 73r40
+11N4 TDI_Pin 106r23 108r22 133r23 135r22
+12A9 Bit_Array(7|21M9)<integer> 96r32 144r13 146r20
+14m4 Word{4|92M9}
+17U14 Initialize_Hardware 17b14 37l8 37t27 224s4
+40U14 Pin_High 40b14 40>24 45l8 45t16 57s10 68s7 106s13 133s13
+40i24 Pin{natural} 42r10 43r36
+47U14 Pin_Low 47b14 47>23 52l8 52t15 59s10 65s7 108s13 135s13
+47i23 Pin{natural} 49r10 50r36
+54U14 Set_TMS_Pin 54b14 54>27 61l8 61t19 78s7 80s7 84s13 89s7 91s7 98s7 101s7
+. 111s13 118s7 129s13 150s7 156s7 160s7 170s7 183s7 213s7 215s7
+54m27 B{7|21M9} 56r10
+63U14 Pulse_TCK 63b14 69l8 69t17 79s7 81s7 87s10 90s7 92s7 93s7 99s7 100s7
+. 102s7 103s7 114s10 117s7 119s7 120s7 138s10 152s10 157s7 161s7 172s10 184s7
+. 185s7 214s7 216s7 217s7
+71V13 Get_TDO{7|21M9} 71b13 74l8 74t15
+76U14 Read_TDO 76b14 94l8 94t16 163s7 174s7 187s7 194s7 205s7
+82i11 I{integer} 83r14
+96U14 Send_Command 96b14 96>28 122l8 122t20 168s7 177s7 180s7 189s7 191s7
+. 193s7 196s7 198s7 200s7 202s7 204s7 207s7 209s7 211s7
+96a28 c{12A9} 105r13
+104i11 I{integer} 105r16 110r14
+124U14 Transceive_Byte_JTAG 124b14 124>36 140l8 140t28 219s7
+124m36 Data_Out{7|20M9} 132r14
+125m7 TDO_Byte{7|20M9}
+127i11 Bit{integer} 128r13 132r42
+142U14 TDO_Test 142b14 221l8 221t16 226s4
+144a7 cmd{12A9} 167m7 168r21 176m7 177r21 179m7 180r21 188m7 189r21 190m7
+. 191r21 192m7 193r21 195m7 196r21 197m7 198r21 199m7 200r21 201m7 202r21
+. 203m7 204r21 206m7 207r21 208m7 209r21 210m7 211r21
+146a7 TDO_IDCODE{12A9}
+151i11 I{integer}
+171i11 I{integer}
+X 7 stm32f0x0.ads
+11K9*STM32F0x0 5|2w6 2r26 3r6 3r26 4r6 4r26 7|124e14
+20M9*Byte<4|81M9> 5|124r47 125r18
+21M9*Bit 5|12r50 54r31 71r28
+23M9*UInt2
+X 8 stm32f0x0-gpio.ads
+9K19*GPIO 5|4w16 4r36 8|505e19
+17M12*MODER_Element{7|23M9}
+20A9*MODER_Field_Array(17M12)<integer>
+25b7*As_Array{boolean} 5|25m10
+33a13*Arr{20A9} 5|26m10
+146A9*IDR_Field_Array(143M12)<integer>
+159a13*Arr{146A9} 5|73r35
+172r7*IDR{150R9} 5|73r31
+230A9*BSRR_BS_Field_Array(227M12)<integer>
+235b7*As_Array{boolean} 5|34m17
+243a13*Arr{230A9} 5|34m35 43m31 43r31
+257A9*BSRR_BR_Field_Array(254M12)<integer>
+262b7*As_Array{boolean} 5|35m17
+270a13*Arr{257A9} 5|35m35 50m31 50r31
+283r7*BS{234R9} 5|34m10 43m28 43r28
+285r7*BR{261R9} 5|35m10 50m28 50r28
+447r7*MODER{24R9} 5|24m20
+455r7*IDR{170R9} 5|73r27
+459r7*BSRR{281R9} 5|33m20 43m23 43r23 50m23 50r23
+486r4*GPIOA_Periph{445R9} 5|24m7 33m7 43m10 50m10 73r14
+X 9 stm32f0x0-rcc.ads
+9K19*RCC 5|3w16 3r36 9|922e18
+428m7*IOPAEN{404M12} 5|21m25
+881r7*AHBENR{410R9} 5|21m18
+919r4*RCC_Periph{869R9} 5|21m7
+X 21 s-bbtime.ads
+46M9*Time
+81I9*Time_Span<long_long_integer>
+

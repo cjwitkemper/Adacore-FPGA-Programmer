@@ -1,0 +1,31 @@
+[GENERATED OBJECT FILE]
+b__jtag_test.o
+[PROJECT FILES]
+/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/jtag_test.gpr
+20260217010437 c9fd3bfef9dcf52101f5befe07c63df5
+/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/gnat_user/light_tasking_stm32f0xx_config.gpr
+20251027214111 21956fdb68084ee7911ab8fe39209c7a
+/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/runtime_build.gpr
+20251027214111 b875783f74e7d3adac5fa8e4269b68d3
+/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/target_options.gpr
+20251027214111 b205a69c5300ad2383fe27e24892976c
+/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/ravenscar_build.gpr
+20251027214111 7ebb45fea34651a5b4b0652e74ac4ab2
+/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/config/jtag_test_config.gpr
+20260217220128 9524d2f14f72e5e9f65be19cb25bb76f
+[BOUND OBJECT FILES]
+/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/obj/development/stm32f0x0.o
+/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/obj/development/stm32f0x0-gpio.o
+/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/obj/development/stm32f0x0-rcc.o
+/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/obj/development/jtag_test.o
+[GENERATED SOURCE FILES]
+b__jtag_test.ads
+b__jtag_test.adb
+b__jtag_test.ali
+[RESULTING OPTIONS]
+-L/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/obj/development/
+-L/home/cwitkemper/Adacore-FPGA-Programmer/JTAG_Test/obj/development/
+-L/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/adalib/
+-static
+/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/adalib/libgnarl.a
+/home/cwitkemper/snap/code/220/.local/share/alire/builds/light_tasking_stm32f0xx_15.0.0_d14cebc3/6017b4eeb699983dff649c9da62ebbb03009e74f5cc58a09b5b4efad1435cf46/adalib/libgnat.a
