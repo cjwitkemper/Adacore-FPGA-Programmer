@@ -70,11 +70,11 @@ package body host_to_mcu is
             loop
                null;
             end loop;
-            Put_Line ("Send Configuration Bitstream"); --  TELL TO SEND BITSTREAM
+            Put_Line ("Send Configuration Bitstream");
             Put_Line ("Configuring FPGA");
             Current_State.Set (PROG_BITSTREAM);
          elsif cmd = "upload" then
-            Put_Line ("Send firmware file"); --  TELL TO SEND FILE
+            Put_Line ("Send firmware file");
             Put_Line ("Uploading file...");
             Current_State.Set (PROG_FIRMWARE);
          else
