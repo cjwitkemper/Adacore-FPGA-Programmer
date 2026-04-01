@@ -7,4 +7,5 @@ package mcu_to_fpga is
    procedure Send_Command (c : Bit_Array);
    procedure Read_TDO;
    procedure Send_Configuration_Bitstream;
+   procedure Send_Firmware;
 end mcu_to_fpga;
