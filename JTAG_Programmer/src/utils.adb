@@ -4,7 +4,40 @@ with STM32F0x0;               use STM32F0x0;
 with STM32F0x0.RCC;           use STM32F0x0.RCC;
 with STM32F0x0.GPIO;          use STM32F0x0.GPIO;
 with STM32F0x0.SPI;           use STM32F0x0.SPI;
-
+------------------------------------------------------------------------------
+--  File:        utils.adb
+--  Description: Package body providing shared low-level hardware utilities
+--               used by both host_to_mcu and mcu_to_fpga. Contains the
+--               protected shared state object, GPIO pin control, JTAG clock
+--               generation, SPI peripheral management, and the byte-level
+--               SPI/JTAG data transfer routines.
+--
+--  Components:
+--               ProgState (Protected) -- Thread-safe getter/setter for the
+--                                        shared State enumeration; coordinates
+--                                        the H2M and M2F task state machine
+--               Pin_Low               -- Drives a GPIOA pin low via BSRR.BR
+--               Pin_High              -- Drives a GPIOA pin high via BSRR.BS
+--               Pulse_TCK             -- Generates a single JTAG TCK pulse
+--                                        (low then high on PA5)
+--               SPI_Enable            -- Enables SPI1 clock; configures
+--                                        master mode, 12 MHz baud, CPOL/CPHA
+--                                        mode 3, 8-bit frames, software SSM;
+--                                        switches PA5/PA6/PA7 to AF0 for
+--                                        SPI1 SCK/MISO/MOSI
+--               SPI_Disable           -- Waits for SPI1 bus idle, restores
+--                                        PA5/PA6/PA7 to GPIO output/input
+--                                        mode, and gates off the SPI1 clock
+--               Transceive_Byte       -- Blocking SPI byte transmit; writes
+--                                        directly to the DR register via an
+--                                        address overlay for 8-bit access
+--               Transceive_Last_Byte_JTAG -- Bit-bangs the final bitstream
+--                                        byte over JTAG, asserting TMS high
+--                                        on the last bit to exit Shift-DR
+--
+--  Target:      STM32F0x0
+--  Language:    Ada 2012
+------------------------------------------------------------------------------
 package body utils is
 
    protected body ProgState is

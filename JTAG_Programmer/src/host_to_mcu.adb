@@ -2,6 +2,29 @@ pragma Style_Checks (Off);
 with STM32F0x0;               use STM32F0x0;
 with STM32F0x0.USART;         use STM32F0x0.USART;
 with Utils; use Utils;
+------------------------------------------------------------------------------
+--  File:        host_to_mcu.adb
+--  Description: Package body for host-to-MCU communication over USART2.
+--               Provides a simple serial command-line interface through which
+--               a host machine can issue commands to drive MCU state
+--               transitions for FPGA configuration and firmware upload.
+--
+--  Components:
+--               Put_Char    -- Blocking single-character transmit over USART2
+--               Put_Line    -- Transmits a string followed by CR/LF
+--               Get_Char    -- Blocking single-character receive over USART2
+--               Get_Line    -- Receives a CR/LF-terminated string into a
+--                              caller-supplied buffer
+--               H2M (Task)  -- Command interpreter task; reads lines from
+--                              the host and dispatches state transitions:
+--                                "config"  -> INIT_CONFIG then PROG_BITSTREAM
+--                                "upload"  -> PROG_FIRMWARE
+--                                "help"    -> prints available commands
+--                                "exit"    -> ESCAPE
+--
+--  Target:      STM32F0x0
+--  Language:    Ada 2012
+------------------------------------------------------------------------------
 package body host_to_mcu is
 
    procedure Put_Char (C : Character) is

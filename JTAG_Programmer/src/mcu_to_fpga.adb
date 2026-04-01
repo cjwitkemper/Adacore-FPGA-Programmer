@@ -6,6 +6,33 @@ with STM32F0x0.SPI;           use STM32F0x0.SPI;
 with STM32F0x0.USART;         use STM32F0x0.USART;
 with STM32F0x0.DMA;           use STM32F0x0.DMA;
 with System.Storage_Elements; use System.Storage_Elements;
+------------------------------------------------------------------------------
+--  File:        mcu_to_fpga.adb
+--  Description: Package body for MCU-to-FPGA communication over JTAG.
+--               Implements TAP (Test Access Port) state machine control,
+--               JTAG command transmission, configuration bitstream loading
+--               via SPI/DMA, and firmware forwarding between USART interfaces.
+--
+--  Components:
+--               Send_Command             -- Shifts an 8-bit IR command into
+--                                           the FPGA via JTAG Shift-IR state
+--               Read_TDO                 -- Clocks through the DR chain to
+--                                           capture TDO output
+--               Init_Configuration       -- Executes the FPGA configuration
+--                                           initialization sequence
+--               Read_IDCODE              -- Reads the JTAG IDCODE register
+--               Reset_TAP                -- Forces TAP controller to
+--                                           Test-Logic-Reset state
+--               Send_Configuration_Bitstream -- Streams bitstream data from
+--                                           DMA circular buffer over JTAG
+--               Send_Firmware            -- Bridges USART2 (host) to USART1
+--                                           (Tang Nano) for firmware upload
+--               M2F (Task)               -- State-machine task driving the
+--                                           above procedures
+--
+--  Target:      STM32F0x0
+--  Language:    Ada 2012
+------------------------------------------------------------------------------
 package body mcu_to_fpga is
 
    Write_Idx        : Natural;

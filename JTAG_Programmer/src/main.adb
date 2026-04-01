@@ -6,7 +6,38 @@ with STM32F0x0.USART; use STM32F0x0.USART;
 with host_to_mcu; use host_to_mcu;
 with mcu_to_fpga; use mcu_to_fpga;
 with utils; use utils;
-
+------------------------------------------------------------------------------
+--  File:        main.adb
+--  Description: Application entry point for the MCU firmware. Performs all
+--               hardware initialization before the Ada runtime starts the
+--               H2M and M2F tasks defined in host_to_mcu and mcu_to_fpga
+--               respectively. Once Initialize_Hardware returns, the two tasks
+--               take over all program activity.
+--
+--  Hardware Initialization (Initialize_Hardware):
+--               GPIOA       -- Enables IOPAEN clock; configures pin modes:
+--                                PA0        : Alternate function (USART2)
+--                                PA2, PA3   : Alternate function AF1 (USART2
+--                                             TX / RX)
+--                                PA4        : Output (SPI CS, initially low)
+--                                PA5        : Output (TCK,  initially low)
+--                                PA6        : Input  (TDO)
+--                                PA7        : Output (TDI/TMS, initially low)
+--               USART2      -- Enables APB1 clock; configures 115200 baud
+--                             at 48 MHz with CTS flow control; enables
+--                             UART, TX, and RX
+--
+--  Tasks Started Implicitly by Ada Runtime:
+--               H2M (host_to_mcu) -- Serial command interpreter; drives
+--                                    shared state machine in response to
+--                                    host commands received over USART2
+--               M2F (mcu_to_fpga) -- JTAG/SPI/USART worker; executes FPGA
+--                                    configuration and firmware upload
+--                                    sequences as directed by H2M
+--
+--  Target:      STM32F0x0
+--  Language:    Ada 2012
+------------------------------------------------------------------------------
 procedure Main is
 
 procedure Initialize_Hardware is
