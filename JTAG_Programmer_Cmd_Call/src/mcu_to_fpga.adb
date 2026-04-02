@@ -231,7 +231,7 @@ package body mcu_to_fpga is
          --  Timeout
          if Has_Data and then Stable_Count >= Stable_Threshold then
             SPI_Disable;
-            Transceive_Last_Byte_JTAG (DMA_Buffer (Read_Idx));
+            Transceive_Last_Byte (DMA_Buffer (Read_Idx));
             Read_Idx := (Read_Idx + 1) mod Buffer_Size;
             Pulse_TCK; -- UPDATE-DR
             Pin_Low (TMS_Pin);

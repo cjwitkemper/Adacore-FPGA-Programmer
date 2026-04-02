@@ -231,7 +231,7 @@ package body mcu_to_fpga is
          --  Timeout
          if Has_Data and then Stable_Count >= Stable_Threshold then
             SPI_Disable;
-            Transceive_Last_Byte_JTAG (DMA_Buffer (Read_Idx));
+            Transceive_Last_Byte (DMA_Buffer (Read_Idx));
             Read_Idx := (Read_Idx + 1) mod Buffer_Size;
             Pulse_TCK; -- UPDATE-DR
             Pin_Low (TMS_Pin);
@@ -355,25 +355,5 @@ package body mcu_to_fpga is
          null;
       end loop;
    end Send_Firmware;
-
-
-   task body M2F is
-   begin
-      loop
-         case Current_State.Get is
-            when IDLE =>
-               null;
-            when INIT_CONFIG =>
-               Reset_TAP;
-               Init_Configuration;
-            when PROG_BITSTREAM =>
-               Send_Configuration_Bitstream;
-            when PROG_FIRMWARE =>
-               Send_Firmware;
-            when ESCAPE =>
-               exit;
-         end case;
-      end loop;
-   end M2F;
 
 end mcu_to_fpga;

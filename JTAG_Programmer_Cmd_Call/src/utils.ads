@@ -30,6 +30,6 @@ procedure Pulse_TCK;
 procedure SPI_Enable;
 procedure SPI_Disable;
 procedure Transceive_Byte (Data_Out : Byte);
-procedure Transceive_Last_Byte_JTAG (Data_Out : Byte);
+procedure Transceive_Last_Byte (Data_Out : Byte);
 
 end Utils;

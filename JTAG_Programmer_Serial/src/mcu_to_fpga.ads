@@ -1,6 +1,5 @@
 with utils; use utils;
 package mcu_to_fpga is
-   task M2F;
    procedure Init_Configuration;
    procedure Read_IDCODE;
    procedure Reset_TAP;

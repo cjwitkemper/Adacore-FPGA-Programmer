@@ -31,7 +31,7 @@ with STM32F0x0.SPI;           use STM32F0x0.SPI;
 --               Transceive_Byte       -- Blocking SPI byte transmit; writes
 --                                        directly to the DR register via an
 --                                        address overlay for 8-bit access
---               Transceive_Last_Byte_JTAG -- Bit-bangs the final bitstream
+--               Transceive_Last_Byte  -- Bit-bangs the final bitstream
 --                                        byte over JTAG, asserting TMS high
 --                                        on the last bit to exit Shift-DR
 --
@@ -124,7 +124,7 @@ package body utils is
       DR_Byte := Data_Out;
    end Transceive_Byte;
 
-   procedure Transceive_Last_Byte_JTAG (Data_Out : Byte) is
+   procedure Transceive_Last_Byte (Data_Out : Byte) is
    begin
       for Bit in reverse 0 .. 7 loop
          if Bit = 0 then
@@ -139,6 +139,6 @@ package body utils is
 
          Pulse_TCK;
       end loop;
-   end Transceive_Last_Byte_JTAG;
+   end Transceive_Last_Byte;
 
 end Utils;

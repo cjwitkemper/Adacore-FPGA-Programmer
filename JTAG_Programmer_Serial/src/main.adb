@@ -87,4 +87,9 @@ procedure Initialize_Hardware is
 
    begin
       Initialize_Hardware;
+      Reset_TAP;
+      Init_Configuration;
+      Send_Configuration_Bitstream;
+      Send_Firmware;
+
 end Main;
